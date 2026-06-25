@@ -293,6 +293,11 @@ async function connectWallet() {
       }
     }
     signer   = await provider.getSigner();
+    // Force legacy transactions for Ritual Chain
+    const network = await provider.getNetwork();
+    if (Number(network.chainId) === 1979) {
+      provider._networkNameOverride = "ritual";
+    }
     userAddr = await signer.getAddress();
     contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
@@ -385,7 +390,7 @@ async function requestScore() {
   showStatus("reqStatus", '<span class="spinner"></span>Sending tx to Ritual...', "loading");
 
   try {
-    const tx = await contract.requestScore({ value: ethers.parseEther("0.001") });
+    const tx = await contract.requestScore({ value: ethers.parseEther("0.001"), type: 0, gasPrice: ethers.parseUnits("1.2", "gwei") });
     showStatus("reqStatus", `<span class="spinner"></span>Tx: ${tx.hash.slice(0,12)}...\nWaiting for TEE to process your score...`, "loading");
     const r = await tx.wait();
     showStatus("reqStatus", `✅ Submitted! Tx confirmed.\nThe sovereign agent's TEE executor is computing your score.\nIt will appear here automatically.`, "ok");
