@@ -98,6 +98,8 @@ main{max-width:680px;width:100%;padding:40px 20px;display:flex;flex-direction:co
 .spinner{display:inline-block;width:13px;height:13px;border:2px solid transparent;border-top-color:currentColor;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+.wmenu-item{padding:9px 12px;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;transition:background 0.15s;}
+.wmenu-item:hover{background:var(--border);}
 footer{padding:28px 32px;text-align:center;color:var(--muted);font-size:12px;border-top:1px solid var(--border);width:100%;margin-top:auto;}
 footer a{color:var(--accent2);text-decoration:none;}
 </style>
@@ -114,7 +116,21 @@ footer a{color:var(--accent2);text-decoration:none;}
     <span class="pill pill-agent offline" id="agentPill">
       <span class="pulse"></span> Agent Offline
     </span>
-    <button class="btn btn-connect" id="connectBtn" onclick="connectWallet()">Connect</button>
+    <div style="position:relative">
+      <button class="btn btn-connect" id="connectBtn" onclick="toggleWalletMenu()">Connect</button>
+      <div id="walletMenu" style="display:none;position:absolute;right:0;top:44px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;min-width:190px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,0.5)">
+        <div id="walletOptions">
+          <div class="wmenu-item" onclick="connectWith('metamask')">🦊 MetaMask</div>
+          <div class="wmenu-item" onclick="connectWith('rabby')">🐰 Rabby</div>
+          <div class="wmenu-item" onclick="connectWith('any')">🔗 Any Wallet</div>
+        </div>
+        <div id="walletConnected" style="display:none">
+          <div style="padding:8px 12px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);margin-bottom:4px" id="walletAddrFull"></div>
+          <div class="wmenu-item" onclick="copyAddr()">📋 Copy Address</div>
+          <div class="wmenu-item" onclick="disconnectWallet()" style="color:var(--error)">⏏ Disconnect</div>
+        </div>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -215,7 +231,7 @@ const ABI = [
   "function requestScore() external payable returns (bytes32)",
   "function getScore(address) external view returns (uint16,uint8,string,uint64,bool,string)",
   "function isEligible(address,uint16) external view returns (bool)",
-  "function getAgentStatus() external view returns (bool,uint256,uint256,uint256,uint256,uint256,uint256)",
+  "function getStatus() external view returns (bool,uint256,uint256,uint256,uint256)",
   "function getRegisteredWallets() external view returns (address[])",
   "event ScoreUpdated(address indexed,uint16,uint8,string)",
   "event AgentWoke(uint256 indexed,uint256,uint256)"
@@ -224,6 +240,40 @@ const ABI = [
 let provider, signer, contract, userAddr;
 
 // ── Connect ────────────────────────────────────────────────────
+function toggleWalletMenu() {
+  const menu = document.getElementById("walletMenu");
+  menu.style.display = menu.style.display === "none" ? "block" : "none";
+}
+
+// Close menu when clicking outside
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#walletMenu") && !e.target.closest("#connectBtn")) {
+    const m = document.getElementById("walletMenu");
+    if (m) m.style.display = "none";
+  }
+});
+
+async function connectWith(walletType) {
+  document.getElementById("walletMenu").style.display = "none";
+  await connectWallet();
+}
+
+async function disconnectWallet() {
+  provider = null; signer = null; contract = null; userAddr = null;
+  document.getElementById("connectBtn").textContent = "Connect";
+  document.getElementById("connectBtn").style.background = "var(--accent)";
+  document.getElementById("walletOptions").style.display = "block";
+  document.getElementById("walletConnected").style.display = "none";
+  document.getElementById("myScoreCard").style.display = "none";
+  document.getElementById("reqBtn").disabled = true;
+  document.getElementById("reqBtn").textContent = "Connect wallet first";
+  document.getElementById("walletMenu").style.display = "none";
+}
+
+async function copyAddr() {
+  if (userAddr) { await navigator.clipboard.writeText(userAddr); alert("Address copied!"); }
+}
+
 async function connectWallet() {
   if (!window.ethereum) { alert("Install MetaMask first"); return; }
   try {
@@ -248,6 +298,10 @@ async function connectWallet() {
 
     const short = userAddr.slice(0,6)+"..."+userAddr.slice(-4);
     document.getElementById("connectBtn").textContent = short;
+    document.getElementById("connectBtn").style.background = "var(--success)";
+    document.getElementById("walletAddrFull").textContent = userAddr;
+    document.getElementById("walletOptions").style.display = "none";
+    document.getElementById("walletConnected").style.display = "block";
     document.getElementById("myScoreCard").style.display = "block";
     document.getElementById("reqBtn").disabled = false;
     document.getElementById("reqBtn").textContent = "Request Score (0.001 RITUAL)";
@@ -306,7 +360,7 @@ async function loadMyScore() {
 async function loadAgentStatus() {
   if (!contract || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") return;
   try {
-    const [running,wakeups,scored,,,,tracked] = await contract.getAgentStatus();
+    const [running,wakeups,scored,,tracked] = await contract.getStatus();
     document.getElementById("statWakeups").textContent = wakeups.toString();
     document.getElementById("statScored").textContent  = scored.toString();
     document.getElementById("statTracked").textContent = tracked.toString();
