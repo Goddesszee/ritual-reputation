@@ -606,6 +606,33 @@ window.addEventListener("eip6963:announceProvider", (e) => {
 });
 window.dispatchEvent(new Event("eip6963:requestProvider"));
 
+// Auto-switch back to Ritual if user changes chain
+window.addEventListener("eip6963:announceProvider", (e) => {
+  const p = e.detail.provider;
+  if (p.on) {
+    p.on("chainChanged", async (chainId) => {
+      if (chainId !== RITUAL_CHAIN_ID && activeProvider === p && userAddr) {
+        showChainBanner(true);
+        try { await ensureRitualChain(); showChainBanner(false); } catch(e) {}
+      } else {
+        showChainBanner(false);
+      }
+    });
+  }
+});
+
+function showChainBanner(show) {
+  let b = document.getElementById("chainBanner");
+  if (!b) {
+    b = document.createElement("div");
+    b.id = "chainBanner";
+    b.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:999;background:#7c3aed;color:#fff;text-align:center;padding:10px;font-size:13px;font-weight:600;font-family:Space Grotesk,sans-serif;display:none;";
+    b.innerHTML = '⚠ Wrong network — switching to Ritual Chain...';
+    document.body.prepend(b);
+  }
+  b.style.display = show ? "block" : "none";
+}
+
 function toggleWalletMenu() {
   const drop = document.getElementById("walletDrop");
   if (!drop.classList.contains("open")) { buildWalletMenu(); drop.classList.add("open"); }
@@ -657,19 +684,39 @@ async function disconnectWallet() {
 async function copyAddr() {
   if (userAddr) { await navigator.clipboard.writeText(userAddr); }
 }
+async function ensureRitualChain() {
+  // Check current chain
+  const chainId = await activeProvider.request({ method: "eth_chainId" });
+  if (chainId === RITUAL_CHAIN_ID) return; // already on Ritual
+
+  // Try to switch
+  try {
+    await activeProvider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: RITUAL_CHAIN_ID }] });
+  } catch(e) {
+    // Chain not added yet (4902) — add it then switch
+    if (e.code === 4902 || e.code === -32603) {
+      await activeProvider.request({ method: "wallet_addEthereumChain", params: [{
+        chainId: RITUAL_CHAIN_ID,
+        chainName: "Ritual Chain Testnet",
+        nativeCurrency: { name: "RITUAL", symbol: "RITUAL", decimals: 18 },
+        rpcUrls: [RITUAL_RPC],
+        blockExplorerUrls: ["https://explorer.ritualfoundation.org"]
+      }]});
+      // Switch again after adding
+      await activeProvider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: RITUAL_CHAIN_ID }] });
+    } else {
+      throw e;
+    }
+  }
+  // Small delay for wallet to settle after switch
+  await new Promise(r => setTimeout(r, 500));
+}
+
 async function connectWallet() {
   if (!activeProvider) return;
   try {
     await activeProvider.request({ method: "eth_requestAccounts" });
-    try {
-      await activeProvider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: RITUAL_CHAIN_ID }] });
-    } catch(e) {
-      if (e.code === 4902) await activeProvider.request({ method: "wallet_addEthereumChain", params: [{
-        chainId: RITUAL_CHAIN_ID, chainName: "Ritual Chain Testnet",
-        nativeCurrency: { name:"RITUAL", symbol:"RITUAL", decimals:18 },
-        rpcUrls: [RITUAL_RPC], blockExplorerUrls: ["https://explorer.ritualfoundation.org"]
-      }]});
-    }
+    await ensureRitualChain();
     provider = new ethers.BrowserProvider(activeProvider);
     signer   = await provider.getSigner();
     userAddr = await signer.getAddress();
