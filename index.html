@@ -242,10 +242,52 @@ let provider, signer, contract, userAddr;
 // ── Connect ────────────────────────────────────────────────────
 function toggleWalletMenu() {
   const menu = document.getElementById("walletMenu");
-  menu.style.display = menu.style.display === "none" ? "block" : "none";
+  const isHidden = menu.style.display === "none" || menu.style.display === "";
+  if (isHidden) {
+    buildWalletMenu();
+    menu.style.display = "block";
+  } else {
+    menu.style.display = "none";
+  }
 }
 
-// Close menu when clicking outside
+function buildWalletMenu() {
+  const opts = document.getElementById("walletOptions");
+  opts.innerHTML = "";
+
+  // Detect available wallets
+  const hasMetaMask = window.ethereum?.isMetaMask && !window.ethereum?.isRabby;
+  const hasRabby    = window.ethereum?.isRabby;
+  const providers   = window.ethereum?.providers || [];
+
+  const mmProvider  = providers.find(p => p.isMetaMask && !p.isRabby) || (hasMetaMask ? window.ethereum : null);
+  const rabbyProvider = providers.find(p => p.isRabby) || (hasRabby ? window.ethereum : null);
+
+  if (mmProvider) {
+    const d = document.createElement("div");
+    d.className = "wmenu-item";
+    d.innerHTML = "🦊 MetaMask";
+    d.onclick = () => connectWithProvider(mmProvider, "MetaMask");
+    opts.appendChild(d);
+  }
+
+  if (rabbyProvider) {
+    const d = document.createElement("div");
+    d.className = "wmenu-item";
+    d.innerHTML = "🐰 Rabby";
+    d.onclick = () => connectWithProvider(rabbyProvider, "Rabby");
+    opts.appendChild(d);
+  }
+
+  if (!mmProvider && !rabbyProvider) {
+    const d = document.createElement("div");
+    d.className = "wmenu-item";
+    d.innerHTML = "🔗 Connect Wallet";
+    d.onclick = () => connectWithProvider(window.ethereum, "Wallet");
+    opts.appendChild(d);
+  }
+}
+
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#walletMenu") && !e.target.closest("#connectBtn")) {
     const m = document.getElementById("walletMenu");
@@ -253,16 +295,17 @@ document.addEventListener("click", (e) => {
   }
 });
 
-async function connectWith(walletType) {
+async function connectWithProvider(prov, name) {
   document.getElementById("walletMenu").style.display = "none";
-  await connectWallet();
+  await connectWallet(prov, name);
 }
 
 async function disconnectWallet() {
   provider = null; signer = null; contract = null; userAddr = null;
-  document.getElementById("connectBtn").textContent = "Connect";
-  document.getElementById("connectBtn").style.background = "var(--accent)";
-  document.getElementById("walletOptions").style.display = "block";
+  const btn = document.getElementById("connectBtn");
+  btn.textContent = "Connect";
+  btn.style.background = "var(--accent)";
+  document.getElementById("walletOptions").innerHTML = "";
   document.getElementById("walletConnected").style.display = "none";
   document.getElementById("myScoreCard").style.display = "none";
   document.getElementById("reqBtn").disabled = true;
@@ -271,19 +314,21 @@ async function disconnectWallet() {
 }
 
 async function copyAddr() {
-  if (userAddr) { await navigator.clipboard.writeText(userAddr); alert("Address copied!"); }
+  if (userAddr) { await navigator.clipboard.writeText(userAddr); alert("Copied!"); }
 }
 
-async function connectWallet() {
-  if (!window.ethereum) { alert("Install MetaMask first"); return; }
+async function connectWallet(injected, walletName) {
+  injected = injected || window.ethereum;
+  walletName = walletName || "Wallet";
+  if (!injected) { alert("No wallet found. Install MetaMask."); return; }
   try {
-    provider = new ethers.BrowserProvider(window.ethereum);
+    provider = new ethers.BrowserProvider(injected);
     await provider.send("eth_requestAccounts", []);
     try {
-      await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:RITUAL_CHAIN_ID}] });
+      await injected.request({ method:"wallet_switchEthereumChain", params:[{chainId:RITUAL_CHAIN_ID}] });
     } catch(e) {
       if (e.code === 4902) {
-        await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{
+        await injected.request({ method:"wallet_addEthereumChain", params:[{
           chainId: RITUAL_CHAIN_ID,
           chainName: "Ritual Chain Testnet",
           nativeCurrency: { name:"RITUAL", symbol:"RITUAL", decimals:18 },
@@ -454,7 +499,7 @@ modifier requireReputation(uint16 minScore) {
 // Usage: onlyGold = requireReputation(500)
 // Usage: onlyPlatinum = requireReputation(750)`;
 
-if (window.ethereum?.selectedAddress) connectWallet();
+// Don't auto-connect — let user choose their wallet
 </script>
 </body>
 </html>
