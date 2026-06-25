@@ -223,67 +223,52 @@ footer a{color:var(--accent2);text-decoration:none;}
 <script>
 const RITUAL_CHAIN_ID = "0x7BB";
 const RITUAL_RPC      = "https://rpc.ritualfoundation.org";
-
-// ← Replace after deploying contract
-let CONTRACT_ADDRESS  = "0x0b3d96FA95b5C8033994cF77FFC174DBAD50CF8D";
+const CONTRACT_ADDRESS = "0x0b3d96FA95b5C8033994cF77FFC174DBAD50CF8D";
 
 const ABI = [
-  "function requestScore() external payable returns (bytes32)",
+  "function requestScore() external payable",
   "function getScore(address) external view returns (uint16,uint8,string,uint64,bool,string)",
   "function isEligible(address,uint16) external view returns (bool)",
   "function getStatus() external view returns (bool,uint256,uint256,uint256,uint256)",
-  "function getRegisteredWallets() external view returns (address[])",
-  "event ScoreUpdated(address indexed,uint16,uint8,string)",
-  "event AgentWoke(uint256 indexed,uint256,uint256)"
 ];
 
-let provider, signer, contract, userAddr;
+let provider, signer, contract, userAddr, activeProvider;
+const eip6963Wallets = {};
 
-// ── Connect ────────────────────────────────────────────────────
+// ── EIP-6963 Wallet Detection ──────────────────────────────────
+window.addEventListener("eip6963:announceProvider", (e) => {
+  eip6963Wallets[e.detail.info.rdns] = { provider: e.detail.provider, info: e.detail.info };
+});
+window.dispatchEvent(new Event("eip6963:requestProvider"));
+
 function toggleWalletMenu() {
   const menu = document.getElementById("walletMenu");
-  const isHidden = menu.style.display === "none" || menu.style.display === "";
-  if (isHidden) {
-    buildWalletMenu();
-    menu.style.display = "block";
-  } else {
-    menu.style.display = "none";
-  }
+  const isHidden = menu.style.display === "none" || !menu.style.display;
+  if (isHidden) { buildWalletMenu(); menu.style.display = "block"; }
+  else menu.style.display = "none";
 }
 
 function buildWalletMenu() {
   const opts = document.getElementById("walletOptions");
   opts.innerHTML = "";
-
-  // Detect available wallets
-  const hasMetaMask = window.ethereum?.isMetaMask && !window.ethereum?.isRabby;
-  const hasRabby    = window.ethereum?.isRabby;
-  const providers   = window.ethereum?.providers || [];
-
-  const mmProvider  = providers.find(p => p.isMetaMask && !p.isRabby) || (hasMetaMask ? window.ethereum : null);
-  const rabbyProvider = providers.find(p => p.isRabby) || (hasRabby ? window.ethereum : null);
-
-  if (mmProvider) {
+  const order = ["io.metamask","io.rabby","com.okex.wallet"];
+  const icons = { "io.metamask":"🦊", "io.rabby":"🐰", "com.okex.wallet":"⭕" };
+  let found = false;
+  order.forEach(rdns => {
+    if (!eip6963Wallets[rdns]) return;
+    found = true;
+    const w = eip6963Wallets[rdns];
     const d = document.createElement("div");
     d.className = "wmenu-item";
-    d.innerHTML = "🦊 MetaMask";
-    d.onclick = () => connectWithProvider(mmProvider, "MetaMask");
+    d.innerHTML = (icons[rdns]||"🔗") + " " + w.info.name;
+    d.onclick = () => connectWithWallet(rdns);
     opts.appendChild(d);
-  }
-
-  if (rabbyProvider) {
-    const d = document.createElement("div");
-    d.className = "wmenu-item";
-    d.innerHTML = "🐰 Rabby";
-    d.onclick = () => connectWithProvider(rabbyProvider, "Rabby");
-    opts.appendChild(d);
-  }
-
-  if (!mmProvider && !rabbyProvider) {
+  });
+  if (!found && window.ethereum) {
     const d = document.createElement("div");
     d.className = "wmenu-item";
     d.innerHTML = "🔗 Connect Wallet";
-    d.onclick = () => connectWithProvider(window.ethereum, "Wallet");
+    d.onclick = () => connectWithWallet("default");
     opts.appendChild(d);
   }
 }
@@ -295,18 +280,21 @@ document.addEventListener("click", (e) => {
   }
 });
 
-async function connectWithProvider(prov, name) {
+async function connectWithWallet(rdns) {
   document.getElementById("walletMenu").style.display = "none";
-  await connectWallet(prov, name);
+  const w = rdns === "default" ? { provider: window.ethereum } : eip6963Wallets[rdns];
+  if (!w) { alert("Wallet not found"); return; }
+  activeProvider = w.provider;
+  await connectWallet();
 }
 
 async function disconnectWallet() {
-  provider = null; signer = null; contract = null; userAddr = null;
+  provider = null; signer = null; contract = null; userAddr = null; activeProvider = null;
   const btn = document.getElementById("connectBtn");
   btn.textContent = "Connect";
   btn.style.background = "var(--accent)";
-  document.getElementById("walletOptions").innerHTML = "";
   document.getElementById("walletConnected").style.display = "none";
+  document.getElementById("walletOptions").innerHTML = "";
   document.getElementById("myScoreCard").style.display = "none";
   document.getElementById("reqBtn").disabled = true;
   document.getElementById("reqBtn").textContent = "Connect wallet first";
@@ -317,130 +305,113 @@ async function copyAddr() {
   if (userAddr) { await navigator.clipboard.writeText(userAddr); alert("Copied!"); }
 }
 
-async function connectWallet(injected, walletName) {
-  injected = injected || window.ethereum;
-  walletName = walletName || "Wallet";
-  if (!injected) { alert("No wallet found. Install MetaMask."); return; }
+async function connectWallet() {
+  const prov = activeProvider || window.ethereum;
+  if (!prov) { alert("No wallet found. Install MetaMask."); return; }
   try {
-    provider = new ethers.BrowserProvider(injected);
-    await provider.send("eth_requestAccounts", []);
+    await prov.request({ method: "eth_requestAccounts" });
+
+    // Switch to Ritual Chain
     try {
-      await injected.request({ method:"wallet_switchEthereumChain", params:[{chainId:RITUAL_CHAIN_ID}] });
+      await prov.request({ method: "wallet_switchEthereumChain", params: [{ chainId: RITUAL_CHAIN_ID }] });
     } catch(e) {
       if (e.code === 4902) {
-        await injected.request({ method:"wallet_addEthereumChain", params:[{
-          chainId: RITUAL_CHAIN_ID,
-          chainName: "Ritual Chain Testnet",
-          nativeCurrency: { name:"RITUAL", symbol:"RITUAL", decimals:18 },
-          rpcUrls: [RITUAL_RPC],
-          blockExplorerUrls: ["https://explorer.ritualfoundation.org"]
-        }]});
+        await prov.request({ method: "wallet_addEthereumChain", params: [{ chainId: RITUAL_CHAIN_ID, chainName: "Ritual Chain Testnet", nativeCurrency: { name:"RITUAL", symbol:"RITUAL", decimals:18 }, rpcUrls: [RITUAL_RPC], blockExplorerUrls: ["https://explorer.ritualfoundation.org"] }]});
       }
     }
+
+    provider = new ethers.BrowserProvider(prov);
     signer   = await provider.getSigner();
-    // Force legacy transactions for Ritual Chain
-    const network = await provider.getNetwork();
-    if (Number(network.chainId) === 1979) {
-      provider._networkNameOverride = "ritual";
-    }
     userAddr = await signer.getAddress();
     contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
 
     const short = userAddr.slice(0,6)+"..."+userAddr.slice(-4);
-    document.getElementById("connectBtn").textContent = short;
-    document.getElementById("connectBtn").style.background = "var(--success)";
+    const btn = document.getElementById("connectBtn");
+    btn.textContent = short;
+    btn.style.background = "var(--success)";
     document.getElementById("walletAddrFull").textContent = userAddr;
-    document.getElementById("walletOptions").style.display = "none";
+    document.getElementById("walletOptions").innerHTML = "";
     document.getElementById("walletConnected").style.display = "block";
     document.getElementById("myScoreCard").style.display = "block";
     document.getElementById("reqBtn").disabled = false;
     document.getElementById("reqBtn").textContent = "Request Score (0.001 RITUAL)";
 
     await Promise.all([loadMyScore(), loadAgentStatus()]);
-
-    // Poll agent status every 30s
     setInterval(loadAgentStatus, 30000);
 
-    // Listen for score updates
-    contract.on("ScoreUpdated", (wallet, score, tier, reasoning) => {
+    contract.on("Scored", (wallet, points, tier) => {
       if (wallet.toLowerCase() === userAddr.toLowerCase()) {
-        showStatus("reqStatus", `🎉 Score computed! ${score}/1000\n${reasoning}`, "ok");
+        showStatus("reqStatus", `🎉 Score computed! ${points}/1000`, "ok");
         loadMyScore();
-        loadAgentStatus();
       }
     });
-  } catch(e) { console.error(e); }
+  } catch(e) { console.error(e); alert(e.message); }
 }
 
 // ── Load Score ─────────────────────────────────────────────────
 async function loadMyScore() {
-  if (!contract || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") return;
+  if (!contract) return;
   try {
-    const [score,,tierName,expiresAt,isValid,reasoning] = await contract.getScore(userAddr);
-    const s = Number(score);
-
-    document.getElementById("scoreNum").textContent = s || "—";
+    const [points,,tierName,expiresAt,isValid,reason] = await contract.getScore(userAddr);
+    const p = Number(points);
+    document.getElementById("scoreNum").textContent = p || "—";
     document.getElementById("scoreTier").textContent = tierName || "Unrated";
-    document.getElementById("scoreReason").textContent = reasoning || "No score yet. Request one below.";
-
-    // Ring
-    const pct = (s / 1000) * 264;
+    document.getElementById("scoreReason").textContent = reason || "No score yet.";
+    const pct = (p / 1000) * 264;
     document.getElementById("ringFill").style.strokeDashoffset = 264 - pct;
     const color = tierName==="Platinum"?"#e879f9":tierName==="Gold"?"#f59e0b":tierName==="Silver"?"#94a3b8":tierName==="Bronze"?"#b45309":"#64748b";
     document.getElementById("ringFill").style.stroke = color;
-
-    // Tier class
     const tierEl = document.getElementById("scoreTier");
-    tierEl.className = "score-tier " + (tierName?`tier-${tierName.toLowerCase()}`:"");
-
-    // Badge
+    tierEl.className = "score-tier"+(tierName?` tier-${tierName.toLowerCase()}`:"");
     const badge = document.getElementById("validityBadge");
-    if (!s) { badge.className="validity none"; badge.textContent="● Not scored"; }
-    else if (isValid) {
-      badge.className="validity valid";
-      badge.textContent=`● Valid until ${new Date(Number(expiresAt)*1000).toLocaleDateString()}`;
-    } else {
-      badge.className="validity expired";
-      badge.textContent="● Expired — agent will refresh soon";
-    }
+    if (!p) { badge.className="validity none"; badge.textContent="● Not scored"; }
+    else if (isValid) { badge.className="validity valid"; badge.textContent=`● Valid until ${new Date(Number(expiresAt)*1000).toLocaleDateString()}`; }
+    else { badge.className="validity expired"; badge.textContent="● Expired"; }
   } catch(e) { console.error("loadScore:", e); }
 }
 
 // ── Agent Status ───────────────────────────────────────────────
 async function loadAgentStatus() {
-  if (!contract || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") return;
   try {
-    const [running,wakeups,scored,,tracked] = await contract.getStatus();
+    const p = provider || new ethers.JsonRpcProvider(RITUAL_RPC);
+    const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, p);
+    const [running,wakeups,scored,,tracked] = await c.getStatus();
     document.getElementById("statWakeups").textContent = wakeups.toString();
     document.getElementById("statScored").textContent  = scored.toString();
     document.getElementById("statTracked").textContent = tracked.toString();
-
     const pill = document.getElementById("agentPill");
-    if (running) {
-      pill.className = "pill pill-agent";
-      pill.innerHTML = '<span class="pulse"></span> Agent Live';
-    } else {
-      pill.className = "pill pill-agent offline";
-      pill.innerHTML = '<span class="pulse"></span> Agent Offline';
-    }
+    pill.className = "pill pill-agent" + (running ? "" : " offline");
+    pill.innerHTML = `<span class="pulse"></span> Agent ${running ? "Live" : "Offline"}`;
   } catch(e) { /* silent */ }
 }
 
-// ── Request Score ──────────────────────────────────────────────
+// ── Request Score — raw tx, no type field ──────────────────────
 async function requestScore() {
-  if (!signer) { alert("Connect wallet first"); return; }
+  if (!userAddr || !activeProvider) { alert("Connect wallet first"); return; }
   const btn = document.getElementById("reqBtn");
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Submitting...';
   showStatus("reqStatus", '<span class="spinner"></span>Sending tx to Ritual...', "loading");
 
   try {
-    const tx = await contract.requestScore({ value: ethers.parseEther("0.001"), type: 0, gasPrice: ethers.parseUnits("1.2", "gwei") });
-    showStatus("reqStatus", `<span class="spinner"></span>Tx: ${tx.hash.slice(0,12)}...\nWaiting for TEE to process your score...`, "loading");
-    const r = await tx.wait();
-    showStatus("reqStatus", `✅ Submitted! Tx confirmed.\nThe sovereign agent's TEE executor is computing your score.\nIt will appear here automatically.`, "ok");
+    // Use raw eth_sendTransaction — no type field = Ritual accepts it
+    const txHash = await activeProvider.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: userAddr,
+        to: CONTRACT_ADDRESS,
+        value: "0x38D7EA4C68000",  // 0.001 RITUAL in hex
+        data: "0x3d322a11",         // requestScore() selector
+        gas: "0x15F90",
+        gasPrice: "0x47868C00"      // 1.2 gwei
+      }]
+    });
+    showStatus("reqStatus", `✅ Tx confirmed!
+Hash: ${txHash.slice(0,20)}...
+Your score is being computed on-chain.`, "ok");
+    setTimeout(loadMyScore, 5000);
   } catch(e) {
-    showStatus("reqStatus", `❌ ${e.reason || e.message}`, "err");
+    showStatus("reqStatus", `❌ ${e.message}`, "err");
   }
 
   btn.disabled = false;
@@ -451,55 +422,45 @@ async function requestScore() {
 async function lookupWallet() {
   const addr = document.getElementById("lookupInput").value.trim();
   if (!ethers.isAddress(addr)) { showStatus("lookupStatus","❌ Invalid address","err"); return; }
-
   showStatus("lookupStatus",'<span class="spinner"></span>Looking up...','loading');
   try {
-    const p = provider || new ethers.JsonRpcProvider(RITUAL_RPC);
+    const p = new ethers.JsonRpcProvider(RITUAL_RPC);
     const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, p);
-    const [score,,tierName,expiresAt,isValid,reasoning] = await c.getScore(addr);
-    const s = Number(score);
-
-    if (!s) {
-      showStatus("lookupStatus", `${addr.slice(0,10)}...\n● Not scored yet`, "");
-    } else {
+    const [points,,tierName,expiresAt,isValid,reason] = await c.getScore(addr);
+    const pts = Number(points);
+    if (!pts) { showStatus("lookupStatus",`${addr.slice(0,10)}...
+● Not scored yet`,""); }
+    else {
       const exp = new Date(Number(expiresAt)*1000).toLocaleDateString();
-      showStatus("lookupStatus",
-        `${addr.slice(0,10)}...\nScore: ${s}/1000 — ${tierName}\n${reasoning}\n${isValid?`Valid until ${exp}`:"Expired"}`,
-        isValid?"ok":"err"
-      );
+      showStatus("lookupStatus",`${addr.slice(0,10)}...
+Score: ${pts}/1000 — ${tierName}
+${reason}
+${isValid?`Valid until ${exp}`:"Expired"}`, isValid?"ok":"err");
     }
   } catch(e) { showStatus("lookupStatus",`❌ ${e.message}`,"err"); }
 }
 
-// ── Helpers ────────────────────────────────────────────────────
 function showStatus(id, msg, type) {
   const el = document.getElementById(id);
   el.innerHTML = msg;
   el.className = "status show " + type;
 }
 
-// ── Init ───────────────────────────────────────────────────────
+// Init code snippet
 document.getElementById("codeSnippet").textContent =
-`// Add reputation gating to any Solidity contract
-interface ISovereignRepAgent {
+`interface ISovereignRepAgent {
     function isEligible(address wallet, uint16 minScore)
         external view returns (bool);
 }
-
 address constant REP_AGENT = ${CONTRACT_ADDRESS};
-
 modifier requireReputation(uint16 minScore) {
-    require(
-        ISovereignRepAgent(REP_AGENT).isEligible(msg.sender, minScore),
-        "Insufficient reputation score"
-    );
+    require(ISovereignRepAgent(REP_AGENT).isEligible(msg.sender, minScore), "Low reputation");
     _;
-}
+}`;
 
-// Usage: onlyGold = requireReputation(500)
-// Usage: onlyPlatinum = requireReputation(750)`;
+// Load agent status on page load (no wallet needed)
+loadAgentStatus();
 
-// Don't auto-connect — let user choose their wallet
 </script>
 </body>
 </html>
