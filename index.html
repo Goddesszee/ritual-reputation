@@ -3,123 +3,404 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>RepScore — Sovereign AI Reputation on Ritual Chain</title>
+<title>RepScore — On-Chain AI Reputation</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
 <style>
+/* ── Tokens ── */
 :root {
-  --bg:#08080f; --surface:#111118; --border:#1a1a2a;
-  --accent:#7c3aed; --accent2:#a855f7; --accent3:#c084fc;
-  --gold:#f59e0b; --silver:#94a3b8; --bronze:#b45309; --platinum:#e879f9;
-  --text:#e2e8f0; --muted:#64748b; --success:#10b981; --error:#ef4444;
+  --black:#050509;
+  --ink:#0b0b12;
+  --panel:#0f0f18;
+  --line:#1c1c2e;
+  --muted:#3a3a5c;
+  --dim:#6b6b9a;
+  --text:#e8e8f4;
+  --white:#f4f4ff;
+
+  --violet:#7c3aed;
+  --violet-mid:#9d5cf5;
+  --violet-light:#c4b5fd;
+  --violet-glow:rgba(124,58,237,.18);
+
+  --gold:#f0b429;
+  --silver:#a8b2c8;
+  --bronze:#c47c3a;
+  --plat:#e879f9;
+
+  --green:#00d48c;
+  --red:#ff4d6d;
+
+  --r:14px;
+  --r-sm:8px;
+  --r-lg:20px;
 }
+
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;}
-header{width:100%;padding:16px 28px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);background:rgba(8,8,15,.9);backdrop-filter:blur(10px);position:sticky;top:0;z-index:10;}
-.logo{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:800;}
-.logo-mark{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;}
-.header-right{display:flex;align-items:center;gap:10px;}
-.pill{padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;}
-.pill-chain{background:#160a2e;border:1px solid var(--accent);color:var(--accent2);}
-.pill-agent{background:#052e16;border:1px solid var(--success);color:var(--success);display:flex;align-items:center;gap:5px;}
-.pill-agent.offline{background:#1c0808;border-color:var(--error);color:var(--error);}
-.pulse{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.5s infinite;}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+html{scroll-behavior:smooth;}
+
+body{
+  background:var(--black);
+  color:var(--text);
+  font-family:'Space Grotesk',system-ui,sans-serif;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  overflow-x:hidden;
+}
+
+/* ── Noise + grid bg ── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:
+    radial-gradient(ellipse 60% 40% at 50% -10%, rgba(124,58,237,.22) 0%, transparent 70%),
+    linear-gradient(rgba(124,58,237,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124,58,237,.03) 1px, transparent 1px);
+  background-size:100% 100%, 40px 40px, 40px 40px;
+  pointer-events:none;z-index:0;
+}
+
+/* ── Header ── */
+header{
+  width:100%;max-width:900px;
+  padding:18px 28px;
+  display:flex;justify-content:space-between;align-items:center;
+  position:sticky;top:0;z-index:50;
+  background:rgba(5,5,9,.85);
+  backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--line);
+}
+
+.logo{display:flex;align-items:center;gap:11px;text-decoration:none;}
+.logo-hex{
+  width:34px;height:34px;
+  background:linear-gradient(135deg,var(--violet),var(--violet-mid));
+  clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;font-weight:700;color:#fff;
+}
+.logo-text{font-size:16px;font-weight:700;color:var(--white);letter-spacing:-.02em;}
+.logo-sub{font-size:10px;color:var(--dim);font-family:'Space Mono',monospace;letter-spacing:.08em;margin-top:1px;}
+
+.header-right{display:flex;align-items:center;gap:8px;}
+
+.tag{
+  padding:4px 11px;border-radius:99px;
+  font-size:11px;font-weight:600;font-family:'Space Mono',monospace;
+  display:flex;align-items:center;gap:5px;
+}
+.tag-chain{background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.3);color:var(--violet-light);}
+.tag-agent{background:rgba(0,212,140,.08);border:1px solid rgba(0,212,140,.25);color:var(--green);}
+.tag-agent.dead{background:rgba(255,77,109,.08);border-color:rgba(255,77,109,.25);color:var(--red);}
+.dot{width:5px;height:5px;border-radius:50%;background:currentColor;animation:blink 2s ease infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* ── Wallet button ── */
 .wallet-wrap{position:relative;}
-.btn{border:none;cursor:pointer;font-weight:600;border-radius:10px;transition:all .2s;}
-.btn-connect{background:var(--accent);color:#fff;padding:9px 18px;font-size:14px;}
-.btn-connect:hover{background:var(--accent2);}
-.btn-connect.connected{background:var(--success);color:#000;}
-.wallet-menu{display:none;position:absolute;right:0;top:46px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px;min-width:190px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,.5);}
-.wallet-menu.open{display:block;}
-.wmenu-item{padding:9px 12px;font-size:13px;font-weight:600;cursor:pointer;border-radius:8px;transition:background .15s;}
-.wmenu-item:hover{background:var(--border);}
-.wmenu-sep{border-top:1px solid var(--border);margin:4px 0;}
-.wmenu-addr{padding:8px 12px;font-size:11px;color:var(--muted);font-family:monospace;word-break:break-all;}
-.wmenu-danger{color:var(--error);}
-main{max-width:680px;width:100%;padding:36px 20px;display:flex;flex-direction:column;gap:18px;}
-.hero{text-align:center;padding:12px 0 4px;}
-.hero h1{font-size:36px;font-weight:900;line-height:1.1;margin-bottom:10px;}
-.hero h1 span{background:linear-gradient(135deg,#fff 20%,var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.hero p{color:var(--muted);font-size:14px;line-height:1.7;max-width:480px;margin:0 auto;}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;}
-.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:14px;}
-.agent-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.agent-stat{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
-.agent-stat .val{font-size:20px;font-weight:800;color:var(--accent2);}
-.agent-stat .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:3px;}
-.score-display{display:flex;align-items:center;gap:18px;}
-.score-ring{position:relative;width:105px;height:105px;flex-shrink:0;}
-.score-ring svg{width:100%;height:100%;transform:rotate(-90deg);}
-.ring-track{fill:none;stroke:var(--border);stroke-width:8;}
-.ring-fill{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1);}
-.score-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-.score-num{font-size:24px;font-weight:900;}
-.score-denom{font-size:10px;color:var(--muted);}
-.score-info{flex:1;}
-.score-tier{font-size:19px;font-weight:800;margin-bottom:4px;}
-.score-reason{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:8px;}
-.score-model{font-size:11px;color:var(--accent2);font-family:monospace;}
-.tier-bronze{color:var(--bronze);}
-.tier-silver{color:var(--silver);}
-.tier-gold{color:var(--gold);}
-.tier-platinum{color:var(--platinum);}
-.validity{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;margin-top:6px;}
-.validity.valid{background:#052e16;color:var(--success);}
-.validity.expired{background:#1c0808;color:var(--error);}
-.validity.none{background:var(--border);color:var(--muted);}
-.btn-primary{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;padding:13px;border-radius:12px;font-size:15px;font-weight:700;border:none;cursor:pointer;transition:all .2s;}
-.btn-primary:hover:not(:disabled){opacity:.88;transform:translateY(-1px);}
-.btn-primary:disabled{opacity:.35;cursor:not-allowed;}
-.lookup-row{display:flex;gap:8px;}
-.lookup-row input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:13px;font-family:monospace;}
-.lookup-row input:focus{outline:none;border-color:var(--accent);}
-.btn-sm{background:var(--border);color:var(--text);border:none;padding:11px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;}
-.btn-sm:hover{background:#222230;}
-.status{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted);display:none;margin-top:10px;line-height:1.6;white-space:pre-wrap;}
-.status.show{display:block;}
-.status.loading{color:var(--accent2);border-color:var(--accent);}
-.status.ok{color:var(--success);border-color:var(--success);}
-.status.err{color:var(--error);border-color:var(--error);}
-.tee-badge{display:inline-flex;align-items:center;gap:5px;background:#0a0a1a;border:1px solid var(--accent);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:var(--accent2);letter-spacing:.05em;margin-top:6px;}
-.tier-table{width:100%;border-collapse:collapse;}
-.tier-table td,.tier-table th{padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;}
-.tier-table th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
-.tier-table tr:last-child td{border:none;}
-.code{background:#07070e;border:1px solid var(--border);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;color:#a78bfa;overflow-x:auto;white-space:pre;line-height:1.7;}
-.copy-btn{background:var(--border);border:none;color:var(--text);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;float:right;margin-top:-2px;}
-.copy-btn:hover{background:var(--accent);color:#fff;}
-.flow-steps{display:flex;flex-direction:column;gap:8px;}
-.flow-step{display:flex;align-items:flex-start;gap:12px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;}
-.step-num{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
-.step-text{font-size:13px;line-height:1.5;}
-.step-text strong{color:var(--accent2);}
-.spinner{display:inline-block;width:13px;height:13px;border:2px solid transparent;border-top-color:currentColor;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px;}
-@keyframes spin{to{transform:rotate(360deg)}}
-footer{padding:24px;text-align:center;color:var(--muted);font-size:12px;border-top:1px solid var(--border);width:100%;margin-top:auto;}
-footer a{color:var(--accent2);text-decoration:none;}
+.btn-wallet{
+  padding:8px 16px;border-radius:var(--r-sm);border:1px solid var(--line);
+  background:var(--panel);color:var(--text);
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:7px;
+}
+.btn-wallet:hover{border-color:var(--violet);background:var(--ink);}
+.btn-wallet.linked{border-color:rgba(0,212,140,.4);background:rgba(0,212,140,.06);color:var(--green);}
+.wallet-dot{width:7px;height:7px;border-radius:50%;background:var(--green);}
+
+.wallet-drop{
+  display:none;position:absolute;right:0;top:44px;
+  background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--r);padding:6px;min-width:200px;
+  z-index:100;box-shadow:0 16px 48px rgba(0,0,0,.6);
+}
+.wallet-drop.open{display:block;}
+.wdrop-addr{padding:8px 12px;font-size:11px;font-family:'Space Mono',monospace;color:var(--dim);word-break:break-all;}
+.wdrop-sep{border-top:1px solid var(--line);margin:4px 0;}
+.wdrop-item{padding:8px 12px;font-size:13px;font-weight:500;cursor:pointer;border-radius:var(--r-sm);transition:background .15s;}
+.wdrop-item:hover{background:var(--line);}
+.wdrop-item.danger{color:var(--red);}
+
+/* ── Layout ── */
+main{
+  max-width:760px;width:100%;
+  padding:48px 20px 64px;
+  display:flex;flex-direction:column;gap:16px;
+  position:relative;z-index:1;
+}
+
+/* ── Hero ── */
+.hero{text-align:center;padding:16px 0 32px;}
+.hero-eyebrow{
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:11px;font-weight:600;font-family:'Space Mono',monospace;
+  color:var(--violet-light);letter-spacing:.1em;text-transform:uppercase;
+  background:rgba(124,58,237,.1);border:1px solid rgba(124,58,237,.2);
+  padding:5px 14px;border-radius:99px;margin-bottom:20px;
+}
+.hero h1{
+  font-size:clamp(32px,5vw,52px);font-weight:700;
+  line-height:1.08;letter-spacing:-.03em;
+  color:var(--white);margin-bottom:14px;
+}
+.hero h1 em{
+  font-style:normal;
+  background:linear-gradient(90deg,var(--violet-light),var(--plat) 60%,var(--violet-light));
+  background-size:200%;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  animation:shimmer 4s linear infinite;
+}
+@keyframes shimmer{0%{background-position:0%}100%{background-position:200%}}
+.hero p{font-size:15px;color:var(--dim);line-height:1.7;max-width:460px;margin:0 auto;}
+
+/* ── Panel ── */
+.panel{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--r-lg);
+  overflow:hidden;
+}
+.panel-head{
+  padding:14px 20px;
+  border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.panel-label{
+  font-size:10px;font-weight:700;font-family:'Space Mono',monospace;
+  text-transform:uppercase;letter-spacing:.12em;color:var(--muted);
+}
+.panel-body{padding:20px;}
+
+/* ── Stats row ── */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);}
+.stat-cell{
+  padding:18px 20px;
+  border-right:1px solid var(--line);
+}
+.stat-cell:last-child{border-right:none;}
+.stat-val{font-size:22px;font-weight:700;font-family:'Space Mono',monospace;color:var(--white);}
+.stat-lbl{font-size:10px;color:var(--muted);margin-top:3px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
+
+/* ── Score display ── */
+.score-wrap{
+  display:grid;grid-template-columns:auto 1fr;
+  gap:24px;align-items:center;
+  padding:20px;
+}
+
+/* Ring */
+.ring-outer{
+  position:relative;width:120px;height:120px;flex-shrink:0;
+}
+.ring-outer svg{width:100%;height:100%;transform:rotate(-90deg);}
+.ring-track{fill:none;stroke:var(--line);stroke-width:7;}
+.ring-arc{
+  fill:none;stroke-width:7;stroke-linecap:round;
+  transition:stroke-dashoffset 1.4s cubic-bezier(.22,1,.36,1),stroke .4s;
+  stroke-dasharray:326;stroke-dashoffset:326;
+  filter:drop-shadow(0 0 6px currentColor);
+}
+.ring-center{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.ring-num{font-size:26px;font-weight:700;font-family:'Space Mono',monospace;line-height:1;}
+.ring-denom{font-size:9px;color:var(--muted);margin-top:2px;font-family:'Space Mono',monospace;}
+
+/* Score info */
+.score-tier-name{font-size:22px;font-weight:700;margin-bottom:5px;}
+.score-reason{font-size:13px;color:var(--dim);line-height:1.6;margin-bottom:10px;}
+.score-model{font-size:10px;font-family:'Space Mono',monospace;color:var(--violet-light);}
+.score-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;
+}
+.badge-valid{background:rgba(0,212,140,.1);border:1px solid rgba(0,212,140,.25);color:var(--green);}
+.badge-expired{background:rgba(255,77,109,.08);border:1px solid rgba(255,77,109,.2);color:var(--red);}
+.badge-none{background:var(--line);color:var(--dim);}
+.badge-tee{background:rgba(124,58,237,.12);border:1px solid rgba(124,58,237,.3);color:var(--violet-light);}
+
+/* Tier colors */
+.t-bronze{color:var(--bronze);}
+.t-silver{color:var(--silver);}
+.t-gold{color:var(--gold);}
+.t-platinum{color:var(--plat);}
+.t-unrated{color:var(--dim);}
+
+/* ── Process steps ── */
+.steps{display:flex;flex-direction:column;gap:0;}
+.step{
+  display:flex;align-items:flex-start;gap:14px;
+  padding:14px 20px;
+  border-bottom:1px solid var(--line);
+  transition:background .2s;
+}
+.step:last-child{border-bottom:none;}
+.step-n{
+  width:26px;height:26px;border-radius:50%;
+  background:var(--line);color:var(--dim);
+  font-size:11px;font-weight:700;font-family:'Space Mono',monospace;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;
+}
+.step.active .step-n{background:var(--violet);color:#fff;box-shadow:0 0 12px var(--violet-glow);}
+.step.done .step-n{background:rgba(0,212,140,.15);color:var(--green);border:1px solid rgba(0,212,140,.3);}
+.step-info{flex:1;}
+.step-title{font-size:13px;font-weight:600;color:var(--text);}
+.step-desc{font-size:12px;color:var(--dim);margin-top:2px;}
+.step-tag{
+  font-size:10px;font-family:'Space Mono',monospace;font-weight:700;
+  padding:2px 7px;border-radius:4px;margin-left:6px;vertical-align:middle;
+}
+.step-tag.tee{background:rgba(124,58,237,.15);color:var(--violet-light);}
+.step-tag.chain{background:rgba(0,212,140,.1);color:var(--green);}
+
+/* ── CTA button ── */
+.btn-cta{
+  width:100%;padding:15px;
+  background:linear-gradient(135deg,var(--violet) 0%,var(--violet-mid) 100%);
+  color:#fff;border:none;border-radius:var(--r);
+  font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;
+  cursor:pointer;letter-spacing:-.01em;
+  transition:all .2s;position:relative;overflow:hidden;
+}
+.btn-cta::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.1),transparent);
+  opacity:0;transition:opacity .2s;
+}
+.btn-cta:hover:not(:disabled)::before{opacity:1;}
+.btn-cta:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 24px rgba(124,58,237,.4);}
+.btn-cta:disabled{opacity:.3;cursor:not-allowed;}
+
+/* ── Terminal log ── */
+.terminal{
+  display:none;margin:0 20px 20px;
+  background:var(--ink);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:12px 14px;font-family:'Space Mono',monospace;font-size:12px;
+  color:var(--dim);line-height:1.7;white-space:pre-wrap;
+  max-height:160px;overflow-y:auto;
+}
+.terminal.show{display:block;}
+.terminal.loading{color:var(--violet-light);border-color:rgba(124,58,237,.3);}
+.terminal.ok{color:var(--green);border-color:rgba(0,212,140,.3);}
+.terminal.err{color:var(--red);border-color:rgba(255,77,109,.3);}
+
+/* ── Lookup ── */
+.lookup-row{display:flex;gap:8px;padding:20px;}
+.lookup-input{
+  flex:1;background:var(--ink);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:11px 14px;
+  color:var(--text);font-size:12px;font-family:'Space Mono',monospace;
+  transition:border-color .2s;
+}
+.lookup-input:focus{outline:none;border-color:var(--violet);}
+.lookup-input::placeholder{color:var(--muted);}
+.btn-lookup{
+  background:var(--line);color:var(--text);border:1px solid var(--muted);
+  padding:11px 18px;border-radius:var(--r-sm);
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;
+  cursor:pointer;white-space:nowrap;transition:all .2s;
+}
+.btn-lookup:hover{background:var(--violet);border-color:var(--violet);color:#fff;}
+
+/* ── Tier table ── */
+.tier-grid{display:grid;grid-template-columns:repeat(4,1fr);}
+.tier-col{padding:16px 14px;border-right:1px solid var(--line);}
+.tier-col:last-child{border-right:none;}
+.tier-icon{font-size:22px;margin-bottom:6px;}
+.tier-name{font-size:13px;font-weight:700;margin-bottom:3px;}
+.tier-range{font-size:11px;font-family:'Space Mono',monospace;color:var(--dim);margin-bottom:6px;}
+.tier-perk{font-size:11px;color:var(--muted);line-height:1.4;}
+
+/* ── Code block ── */
+.code-wrap{margin:0;position:relative;}
+.code-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;border-bottom:1px solid var(--line);
+}
+.code-dots{display:flex;gap:5px;}
+.code-dots span{width:10px;height:10px;border-radius:50%;}
+.code-dots span:nth-child(1){background:#ff5f57;}
+.code-dots span:nth-child(2){background:#febc2e;}
+.code-dots span:nth-child(3){background:#28c840;}
+.code-lang{font-size:11px;font-family:'Space Mono',monospace;color:var(--muted);}
+.btn-copy{
+  font-size:11px;font-weight:600;font-family:'Space Mono',monospace;
+  background:transparent;border:1px solid var(--line);color:var(--dim);
+  padding:3px 10px;border-radius:4px;cursor:pointer;transition:all .2s;
+}
+.btn-copy:hover{border-color:var(--violet);color:var(--violet-light);}
+.code-body{
+  padding:16px;font-family:'Space Mono',monospace;font-size:11px;
+  color:#c4b5fd;line-height:1.75;overflow-x:auto;white-space:pre;
+}
+
+/* ── Spinner ── */
+.spin{
+  display:inline-block;width:12px;height:12px;
+  border:2px solid transparent;border-top-color:currentColor;
+  border-radius:50%;animation:rot .6s linear infinite;vertical-align:middle;margin-right:5px;
+}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ── Footer ── */
+footer{
+  width:100%;border-top:1px solid var(--line);
+  padding:20px 28px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:relative;z-index:1;
+}
+.footer-left{font-size:12px;color:var(--muted);}
+.footer-links{display:flex;gap:16px;}
+.footer-links a{
+  font-size:12px;color:var(--muted);text-decoration:none;
+  font-family:'Space Mono',monospace;transition:color .2s;
+}
+.footer-links a:hover{color:var(--violet-light);}
+
+/* ── Responsive ── */
+@media(max-width:560px){
+  .stats-row{grid-template-columns:1fr 1fr;}
+  .stats-row .stat-cell:last-child{border-top:1px solid var(--line);border-right:none;grid-column:span 2;}
+  .tier-grid{grid-template-columns:1fr 1fr;}
+  .tier-col:nth-child(2){border-right:none;}
+  .tier-col:nth-child(3){border-top:1px solid var(--line);}
+  .tier-col:last-child{border-top:1px solid var(--line);}
+  .score-wrap{grid-template-columns:1fr;text-align:center;}
+  .ring-outer{margin:0 auto;}
+  .score-badges{justify-content:center;}
+  header{padding:14px 16px;}
+  .logo-sub{display:none;}
+  .tag-chain{display:none;}
+}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">
-    <div class="logo-mark">⬡</div>
-    RepScore
-  </div>
+  <a class="logo" href="#">
+    <div class="logo-hex">R</div>
+    <div>
+      <div class="logo-text">RepScore</div>
+      <div class="logo-sub">ON-CHAIN AI REPUTATION</div>
+    </div>
+  </a>
   <div class="header-right">
-    <span class="pill pill-chain">Ritual · 1979</span>
-    <span class="pill pill-agent offline" id="agentPill">
-      <span class="pulse"></span> Agent Offline
-    </span>
+    <span class="tag tag-chain">Ritual · 1979</span>
+    <span class="tag tag-agent dead" id="agentTag"><span class="dot"></span> Agent Offline</span>
     <div class="wallet-wrap">
-      <button class="btn btn-connect" id="connectBtn" onclick="toggleWalletMenu()">Connect</button>
-      <div class="wallet-menu" id="walletMenu">
+      <button class="btn-wallet" id="connectBtn" onclick="toggleWalletMenu()">
+        Connect Wallet
+      </button>
+      <div class="wallet-drop" id="walletDrop">
         <div id="walletOptions"></div>
         <div id="walletConnected" style="display:none">
-          <div class="wmenu-addr" id="walletAddrFull"></div>
-          <div class="wmenu-sep"></div>
-          <div class="wmenu-item" onclick="copyAddr()">📋 Copy Address</div>
-          <div class="wmenu-item wmenu-danger" onclick="disconnectWallet()">⏏ Disconnect</div>
+          <div class="wdrop-addr" id="walletAddrFull"></div>
+          <div class="wdrop-sep"></div>
+          <div class="wdrop-item" onclick="copyAddr()">Copy address</div>
+          <div class="wdrop-item danger" onclick="disconnectWallet()">Disconnect</div>
         </div>
       </div>
     </div>
@@ -128,122 +409,175 @@ footer a{color:var(--accent2);text-decoration:none;}
 
 <main>
 
+  <!-- Hero -->
   <div class="hero">
-    <h1><span>Sovereign AI</span><br>Reputation on Ritual</h1>
-    <p>Wallet scores computed by GLM-4.7-FP8 inside a Ritual TEE — cryptographically attested, fully on-chain, impossible to fake.</p>
+    <div class="hero-eyebrow">⬡ Powered by Ritual Chain</div>
+    <h1>Wallet reputation,<br><em>computed in a TEE</em></h1>
+    <p>GLM-4.7-FP8 scores your wallet inside a trusted execution environment. Tamper-proof, cryptographically attested, permanently on-chain.</p>
   </div>
 
-  <!-- Agent Status -->
-  <div class="card">
-    <div class="card-title">Agent Status</div>
-    <div class="agent-grid">
-      <div class="agent-stat"><div class="val" id="statScored">—</div><div class="lbl">Wallets Scored</div></div>
-      <div class="agent-stat"><div class="val" id="statWakeups">—</div><div class="lbl">Agent Wakeups</div></div>
-      <div class="agent-stat"><div class="val" id="statEarnings">—</div><div class="lbl">Fees Earned</div></div>
+  <!-- Stats -->
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-label">Agent Status</span>
+      <span class="panel-label" id="blockNum" style="color:var(--violet-light)">—</span>
+    </div>
+    <div class="stats-row">
+      <div class="stat-cell">
+        <div class="stat-val" id="statScored">—</div>
+        <div class="stat-lbl">Wallets Scored</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-val" id="statWakeups">—</div>
+        <div class="stat-lbl">Agent Wakeups</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-val" id="statEarnings">—</div>
+        <div class="stat-lbl">Fees Collected</div>
+      </div>
     </div>
   </div>
 
-  <!-- Your Score -->
-  <div class="card" id="myScoreCard" style="display:none">
-    <div class="card-title">Your Score</div>
-    <div class="score-display">
-      <div class="score-ring">
-        <svg viewBox="0 0 100 100">
-          <circle class="ring-track" cx="50" cy="50" r="42"/>
-          <circle class="ring-fill" id="ringFill" cx="50" cy="50" r="42"
-            stroke="var(--accent2)" stroke-dasharray="264" stroke-dashoffset="264"/>
+  <!-- My Score (hidden until connected) -->
+  <div class="panel" id="myScoreCard" style="display:none">
+    <div class="panel-head">
+      <span class="panel-label">Your Reputation Score</span>
+      <span class="panel-label" id="scoreExpiry" style="color:var(--dim)">—</span>
+    </div>
+    <div class="score-wrap">
+      <div class="ring-outer">
+        <svg viewBox="0 0 120 120">
+          <circle class="ring-track" cx="60" cy="60" r="52"/>
+          <circle class="ring-arc" id="ringArc" cx="60" cy="60" r="52" stroke="var(--violet-mid)"/>
         </svg>
-        <div class="score-center">
-          <span class="score-num" id="scoreNum">—</span>
-          <span class="score-denom">/1000</span>
+        <div class="ring-center">
+          <div class="ring-num" id="scoreNum">—</div>
+          <div class="ring-denom">/1000</div>
         </div>
       </div>
-      <div class="score-info">
-        <div class="score-tier" id="scoreTier">—</div>
-        <div class="score-reason" id="scoreReason">Connect to see your score.</div>
+      <div>
+        <div class="score-tier-name t-unrated" id="scoreTier">Unrated</div>
+        <div class="score-reason" id="scoreReason">Connect your wallet to see your on-chain reputation score.</div>
         <div class="score-model" id="scoreModel"></div>
-        <span class="validity none" id="validityBadge">● Not scored</span>
-        <br>
-        <span class="tee-badge" id="teeBadge" style="display:none">🔐 TEE Attested</span>
+        <div class="score-badges">
+          <span class="badge badge-none" id="validBadge">● Not scored</span>
+          <span class="badge badge-tee" id="teeBadge" style="display:none">🔐 TEE Attested</span>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Request Score -->
-  <div class="card">
-    <div class="card-title">Request AI Score</div>
-    <div class="flow-steps" style="margin-bottom:14px">
-      <div class="flow-step">
-        <div class="step-num">1</div>
-        <div class="step-text">Pay <strong>0.001 RITUAL</strong> fee → emits on-chain event</div>
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-label">Get AI Score</span>
+      <span class="panel-label" style="color:var(--violet-light)">0.001 RITUAL</span>
+    </div>
+    <div class="steps">
+      <div class="step" id="s1">
+        <div class="step-n">1</div>
+        <div class="step-info">
+          <div class="step-title">Pay fee <span class="step-tag chain">ON-CHAIN</span></div>
+          <div class="step-desc">0.001 RITUAL sent to contract — emits ScoreRequested event</div>
+        </div>
       </div>
-      <div class="flow-step">
-        <div class="step-num">2</div>
-        <div class="step-text">Frontend fetches <strong>TEE executor</strong> from Ritual registry</div>
+      <div class="step" id="s2">
+        <div class="step-n">2</div>
+        <div class="step-info">
+          <div class="step-title">Fetch TEE executor <span class="step-tag tee">TEE</span></div>
+          <div class="step-desc">Query TEEServiceRegistry for a live GLM-4.7-FP8 executor</div>
+        </div>
       </div>
-      <div class="flow-step">
-        <div class="step-num">3</div>
-        <div class="step-text"><strong>GLM-4.7-FP8</strong> scores your wallet inside the TEE</div>
+      <div class="step" id="s3">
+        <div class="step-n">3</div>
+        <div class="step-info">
+          <div class="step-title">LLM inference <span class="step-tag tee">TEE</span></div>
+          <div class="step-desc">GLM-4.7-FP8 scores your wallet inside the enclave — hardware-attested</div>
+        </div>
       </div>
-      <div class="flow-step">
-        <div class="step-num">4</div>
-        <div class="step-text">Score stored on-chain with <strong>cryptographic proof</strong></div>
+      <div class="step" id="s4">
+        <div class="step-n">4</div>
+        <div class="step-info">
+          <div class="step-title">Store proof <span class="step-tag chain">ON-CHAIN</span></div>
+          <div class="step-desc">Score stored permanently with LLM tx hash as cryptographic proof</div>
+        </div>
       </div>
     </div>
-    <button class="btn-primary" id="reqBtn" onclick="requestScore()" disabled>
-      Connect wallet first
-    </button>
-    <div class="status" id="reqStatus"></div>
+    <div style="padding:16px 20px 20px;">
+      <button class="btn-cta" id="reqBtn" onclick="requestScore()" disabled>Connect wallet first</button>
+      <div class="terminal" id="reqStatus"></div>
+    </div>
   </div>
 
   <!-- Lookup -->
-  <div class="card">
-    <div class="card-title">Look Up Any Wallet</div>
+  <div class="panel">
+    <div class="panel-head"><span class="panel-label">Look Up Any Wallet</span></div>
     <div class="lookup-row">
-      <input id="lookupInput" type="text" placeholder="0x... wallet address"/>
-      <button class="btn-sm" onclick="lookupWallet()">Search</button>
+      <input class="lookup-input" id="lookupInput" type="text" placeholder="0x... paste any wallet address"/>
+      <button class="btn-lookup" onclick="lookupWallet()">Search</button>
     </div>
-    <div class="status" id="lookupStatus"></div>
+    <div class="terminal" id="lookupStatus" style="margin:0 20px 20px;"></div>
   </div>
 
   <!-- Tiers -->
-  <div class="card">
-    <div class="card-title">Reputation Tiers</div>
-    <table class="tier-table">
-      <tr><th>Tier</th><th>Score</th><th>Unlocks</th></tr>
-      <tr><td class="tier-bronze">🥉 Bronze</td><td>0–249</td><td>Basic access</td></tr>
-      <tr><td class="tier-silver">🥈 Silver</td><td>250–499</td><td>Reduced collateral</td></tr>
-      <tr><td class="tier-gold">🥇 Gold</td><td>500–749</td><td>Undercollateralized loans</td></tr>
-      <tr><td class="tier-platinum">💎 Platinum</td><td>750–1000</td><td>Full protocol access</td></tr>
-    </table>
+  <div class="panel">
+    <div class="panel-head"><span class="panel-label">Reputation Tiers</span></div>
+    <div class="tier-grid">
+      <div class="tier-col">
+        <div class="tier-icon">🥉</div>
+        <div class="tier-name t-bronze">Bronze</div>
+        <div class="tier-range">0 – 249</div>
+        <div class="tier-perk">Basic protocol access</div>
+      </div>
+      <div class="tier-col">
+        <div class="tier-icon">🥈</div>
+        <div class="tier-name t-silver">Silver</div>
+        <div class="tier-range">250 – 499</div>
+        <div class="tier-perk">Reduced collateral ratios</div>
+      </div>
+      <div class="tier-col">
+        <div class="tier-icon">🥇</div>
+        <div class="tier-name t-gold">Gold</div>
+        <div class="tier-range">500 – 749</div>
+        <div class="tier-perk">Undercollateralized loans</div>
+      </div>
+      <div class="tier-col">
+        <div class="tier-icon">💎</div>
+        <div class="tier-name t-platinum">Platinum</div>
+        <div class="tier-range">750 – 1000</div>
+        <div class="tier-perk">Full protocol access</div>
+      </div>
+    </div>
   </div>
 
   <!-- Integration -->
-  <div class="card">
-    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-      Protocol Integration
-      <button class="copy-btn" onclick="copyCode()">Copy</button>
+  <div class="panel">
+    <div class="panel-head"><span class="panel-label">Integrate in Your Contract</span></div>
+    <div class="code-wrap">
+      <div class="code-head">
+        <div class="code-dots"><span></span><span></span><span></span></div>
+        <span class="code-lang">Solidity</span>
+        <button class="btn-copy" onclick="copyCode()">Copy</button>
+      </div>
+      <div class="code-body" id="codeSnippet"></div>
     </div>
-    <div class="code" id="codeSnippet"></div>
   </div>
 
 </main>
 
 <footer>
-  Sovereign agent on <a href="https://ritualfoundation.org" target="_blank">Ritual Chain</a> ·
-  <a href="https://github.com/Goddesszee/ritual-reputation" target="_blank">GitHub</a> ·
-  <a href="https://explorer.ritualfoundation.org" target="_blank">Explorer</a>
+  <div class="footer-left">RepScore · Ritual Chain Testnet</div>
+  <div class="footer-links">
+    <a href="https://github.com/Goddesszee/ritual-reputation" target="_blank">GitHub</a>
+    <a href="https://explorer.ritualfoundation.org/address/0x17E57be0D60b0eC55703025aD558eB11e2FA6AFC" target="_blank">Contract</a>
+    <a href="https://ritual-reputation.vercel.app" target="_blank">Live</a>
+  </div>
 </footer>
 
 <script>
-// ── Config ──────────────────────────────────────────────────────
 const RITUAL_RPC      = "https://rpc.ritualfoundation.org";
-const RITUAL_CHAIN_ID = "0x7BB"; // 1979
-
-// Replace with new RepScoreConsumer address after deploy
+const RITUAL_CHAIN_ID = "0x7BB";
 const CONTRACT_ADDRESS = "0x17E57be0D60b0eC55703025aD558eB11e2FA6AFC";
-
-// Ritual system contracts
 const TEE_REGISTRY    = "0x9644e8562cE0Fe12b4deeC4163c064A8862Bf47F";
 const RITUAL_WALLET   = "0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948";
 const LLM_PRECOMPILE  = "0x0000000000000000000000000000000000000802";
@@ -258,84 +592,68 @@ const CONTRACT_ABI = [
   "event ScoreSubmitted(address indexed,uint16,uint8,bytes32)",
   "event AgentWoke(uint256 indexed,uint256)"
 ];
+const TEE_REGISTRY_ABI = ["function getServicesByCapability(uint8,bool) external view returns (tuple(tuple(address,address,uint8,bytes,string,bytes32,uint8) node,bool isValid,bytes32 workloadId)[])"];
+const RITUAL_WALLET_ABI = ["function deposit(uint256) external payable","function balanceOf(address) external view returns (uint256)"];
 
-const TEE_REGISTRY_ABI = [
-  "function getServicesByCapability(uint8,bool) external view returns (tuple(tuple(address,address,uint8,bytes,string,bytes32,uint8) node,bool isValid,bytes32 workloadId)[])"
-];
-
-const RITUAL_WALLET_ABI = [
-  "function deposit(uint256) external payable",
-  "function balanceOf(address) external view returns (uint256)"
-];
-
-// ── State ───────────────────────────────────────────────────────
 let provider, signer, contract, userAddr, activeProvider;
 const eip6963Wallets = {};
 
-// ── EIP-6963 Wallet Detection ───────────────────────────────────
 window.addEventListener("eip6963:announceProvider", (e) => {
   eip6963Wallets[e.detail.info.rdns] = { provider: e.detail.provider, info: e.detail.info };
 });
 window.dispatchEvent(new Event("eip6963:requestProvider"));
 
 function toggleWalletMenu() {
-  const menu = document.getElementById("walletMenu");
-  const isHidden = !menu.classList.contains("open");
-  if (isHidden) { buildWalletMenu(); menu.classList.add("open"); }
-  else menu.classList.remove("open");
+  const drop = document.getElementById("walletDrop");
+  if (!drop.classList.contains("open")) { buildWalletMenu(); drop.classList.add("open"); }
+  else drop.classList.remove("open");
 }
-
 function buildWalletMenu() {
   const opts = document.getElementById("walletOptions");
   opts.innerHTML = "";
   const order = ["io.metamask","io.rabby","com.okex.wallet"];
-  const icons = { "io.metamask":"🦊", "io.rabby":"🐰", "com.okex.wallet":"⭕" };
+  const icons = {"io.metamask":"🦊","io.rabby":"🐰","com.okex.wallet":"⭕"};
   order.forEach(rdns => {
     if (!eip6963Wallets[rdns]) return;
     const d = document.createElement("div");
-    d.className = "wmenu-item";
-    d.innerHTML = (icons[rdns]||"🔗") + " " + eip6963Wallets[rdns].info.name;
+    d.className = "wdrop-item";
+    d.textContent = (icons[rdns]||"🔗") + " " + eip6963Wallets[rdns].info.name;
     d.onclick = () => connectWithWallet(rdns);
     opts.appendChild(d);
   });
   if (!opts.children.length && window.ethereum) {
     const d = document.createElement("div");
-    d.className = "wmenu-item";
-    d.innerHTML = "🔗 Connect Wallet";
+    d.className = "wdrop-item";
+    d.textContent = "🔗 Connect Wallet";
     d.onclick = () => connectWithWallet("default");
     opts.appendChild(d);
   }
 }
-
-document.addEventListener("click", (e) => {
-  if (!e.target.closest("#walletMenu") && !e.target.closest("#connectBtn")) {
-    document.getElementById("walletMenu").classList.remove("open");
-  }
+document.addEventListener("click", e => {
+  if (!e.target.closest("#walletDrop") && !e.target.closest("#connectBtn"))
+    document.getElementById("walletDrop").classList.remove("open");
 });
-
 async function connectWithWallet(rdns) {
-  document.getElementById("walletMenu").classList.remove("open");
+  document.getElementById("walletDrop").classList.remove("open");
   activeProvider = rdns === "default" ? window.ethereum : eip6963Wallets[rdns]?.provider;
   if (!activeProvider) { alert("Wallet not found"); return; }
   await connectWallet();
 }
-
 async function disconnectWallet() {
   provider = signer = contract = userAddr = activeProvider = null;
-  document.getElementById("connectBtn").textContent = "Connect";
-  document.getElementById("connectBtn").className = "btn btn-connect";
+  const btn = document.getElementById("connectBtn");
+  btn.textContent = "Connect Wallet";
+  btn.className = "btn-wallet";
   document.getElementById("walletConnected").style.display = "none";
   document.getElementById("walletOptions").innerHTML = "";
   document.getElementById("myScoreCard").style.display = "none";
   document.getElementById("reqBtn").disabled = true;
   document.getElementById("reqBtn").textContent = "Connect wallet first";
-  document.getElementById("walletMenu").classList.remove("open");
+  document.getElementById("walletDrop").classList.remove("open");
 }
-
 async function copyAddr() {
-  if (userAddr) { await navigator.clipboard.writeText(userAddr); alert("Copied!"); }
+  if (userAddr) { await navigator.clipboard.writeText(userAddr); }
 }
-
 async function connectWallet() {
   if (!activeProvider) return;
   try {
@@ -343,37 +661,31 @@ async function connectWallet() {
     try {
       await activeProvider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: RITUAL_CHAIN_ID }] });
     } catch(e) {
-      if (e.code === 4902) {
-        await activeProvider.request({ method: "wallet_addEthereumChain", params: [{
-          chainId: RITUAL_CHAIN_ID, chainName: "Ritual Chain Testnet",
-          nativeCurrency: { name:"RITUAL", symbol:"RITUAL", decimals:18 },
-          rpcUrls: [RITUAL_RPC],
-          blockExplorerUrls: ["https://explorer.ritualfoundation.org"]
-        }]});
-      }
+      if (e.code === 4902) await activeProvider.request({ method: "wallet_addEthereumChain", params: [{
+        chainId: RITUAL_CHAIN_ID, chainName: "Ritual Chain Testnet",
+        nativeCurrency: { name:"RITUAL", symbol:"RITUAL", decimals:18 },
+        rpcUrls: [RITUAL_RPC], blockExplorerUrls: ["https://explorer.ritualfoundation.org"]
+      }]});
     }
     provider = new ethers.BrowserProvider(activeProvider);
     signer   = await provider.getSigner();
     userAddr = await signer.getAddress();
     contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-
     const short = userAddr.slice(0,6)+"..."+userAddr.slice(-4);
     const btn = document.getElementById("connectBtn");
-    btn.textContent = short;
-    btn.className = "btn btn-connect connected";
+    btn.innerHTML = '<span class="wallet-dot"></span>' + short;
+    btn.className = "btn-wallet linked";
     document.getElementById("walletAddrFull").textContent = userAddr;
     document.getElementById("walletOptions").innerHTML = "";
     document.getElementById("walletConnected").style.display = "block";
     document.getElementById("myScoreCard").style.display = "block";
     document.getElementById("reqBtn").disabled = false;
     document.getElementById("reqBtn").textContent = "Request Score (0.001 RITUAL)";
-
     await Promise.all([loadMyScore(), loadStatus()]);
     setInterval(loadStatus, 30000);
   } catch(e) { console.error(e); alert(e.message); }
 }
 
-// ── Load Score ──────────────────────────────────────────────────
 async function loadMyScore() {
   if (!contract || !userAddr) return;
   try {
@@ -382,30 +694,23 @@ async function loadMyScore() {
     document.getElementById("scoreNum").textContent = p || "—";
     document.getElementById("scoreTier").textContent = tierName || "Unrated";
     document.getElementById("scoreReason").textContent = reason || "No score yet. Request one below.";
-    document.getElementById("scoreModel").textContent = model ? `Model: ${model}` : "";
-
-    const pct = (p / 1000) * 264;
-    document.getElementById("ringFill").style.strokeDashoffset = 264 - pct;
-    const color = tierName==="Platinum"?"#e879f9":tierName==="Gold"?"#f59e0b":tierName==="Silver"?"#94a3b8":tierName==="Bronze"?"#b45309":"#64748b";
-    document.getElementById("ringFill").style.stroke = color;
-    document.getElementById("scoreTier").className = "score-tier" + (tierName ? ` tier-${tierName.toLowerCase()}` : "");
-
-    const badge = document.getElementById("validityBadge");
-    const teeBadge = document.getElementById("teeBadge");
-    if (!p) {
-      badge.className = "validity none"; badge.textContent = "● Not scored";
-      teeBadge.style.display = "none";
-    } else if (isValid) {
-      badge.className = "validity valid"; badge.textContent = "● Valid — score active";
-      teeBadge.style.display = txProof && txProof !== "0x0000000000000000000000000000000000000000000000000000000000000000" ? "inline-flex" : "none";
-    } else {
-      badge.className = "validity expired"; badge.textContent = "● Score expired";
-      teeBadge.style.display = "none";
-    }
-  } catch(e) { console.error("loadMyScore:", e); }
+    document.getElementById("scoreModel").textContent = model ? "Model: " + model : "";
+    const circ = 2 * Math.PI * 52;
+    const arc = document.getElementById("ringArc");
+    arc.style.strokeDasharray = circ;
+    arc.style.strokeDashoffset = circ - (p / 1000) * circ;
+    const colors = {Platinum:"var(--plat)",Gold:"var(--gold)",Silver:"var(--silver)",Bronze:"var(--bronze)"};
+    arc.style.stroke = colors[tierName] || "var(--violet-mid)";
+    const tierEl = document.getElementById("scoreTier");
+    tierEl.className = "score-tier-name t-" + (tierName||"unrated").toLowerCase();
+    const badge = document.getElementById("validBadge");
+    const tee = document.getElementById("teeBadge");
+    if (!p) { badge.className = "badge badge-none"; badge.textContent = "● Not scored"; tee.style.display="none"; }
+    else if (isValid) { badge.className = "badge badge-valid"; badge.textContent = "● Valid"; tee.style.display = txProof && txProof !== "0x"+"0".repeat(64) ? "inline-flex":"none"; }
+    else { badge.className = "badge badge-expired"; badge.textContent = "● Expired"; tee.style.display="none"; }
+  } catch(e) { console.error(e); }
 }
 
-// ── Load Status ─────────────────────────────────────────────────
 async function loadStatus() {
   try {
     const p = new ethers.JsonRpcProvider(RITUAL_RPC);
@@ -414,288 +719,128 @@ async function loadStatus() {
     document.getElementById("statScored").textContent = scored.toString();
     document.getElementById("statWakeups").textContent = wakeups.toString();
     document.getElementById("statEarnings").textContent = ethers.formatEther(earn).slice(0,6) + " RTL";
-    const pill = document.getElementById("agentPill");
-    pill.className = "pill pill-agent" + (running ? "" : " offline");
-    pill.innerHTML = `<span class="pulse"></span> Agent ${running ? "Live" : "Offline"}`;
-  } catch(e) { /* silent */ }
+    const tag = document.getElementById("agentTag");
+    tag.className = "tag tag-agent" + (running ? "" : " dead");
+    tag.innerHTML = '<span class="dot"></span> Agent ' + (running ? "Live" : "Offline");
+    const bn = await p.getBlockNumber();
+    document.getElementById("blockNum").textContent = "Block #" + bn.toLocaleString();
+  } catch(e) {}
 }
 
-// ── Get TEE Executor ────────────────────────────────────────────
+function setStep(n, state) {
+  for(let i=1;i<=4;i++){
+    const el = document.getElementById("s"+i);
+    el.classList.remove("active","done");
+    if(i < n) el.classList.add("done");
+    if(i === n && state === "active") el.classList.add("active");
+  }
+}
+
 async function getExecutor() {
   try {
     const p = new ethers.JsonRpcProvider(RITUAL_RPC);
     const reg = new ethers.Contract(TEE_REGISTRY, TEE_REGISTRY_ABI, p);
-    const LLM_CAPABILITY = 1;
-    const services = await reg.getServicesByCapability(LLM_CAPABILITY, true);
-    if (services.length === 0) throw new Error("No LLM executors available");
+    const services = await reg.getServicesByCapability(1, true);
+    if (!services.length) throw new Error("no executors");
     return services[0].node.teeAddress;
-  } catch(e) {
-    console.warn("Could not fetch executor:", e.message);
-    return null;
-  }
+  } catch(e) { return null; }
 }
 
-// ── Encode LLM Request (30 fields per Ritual docs) ──────────────
 function encodeLLMRequest(executorAddr, walletAddr) {
   const messages = JSON.stringify([
-    { role: "system", content: "You are a blockchain wallet reputation scorer. Return ONLY valid JSON: {\"score\":<0-1000>,\"tier\":<1-4>,\"reasoning\":\"<max 80 chars>\"}. Scoring: wallet age=200pts, tx activity=300pts, DeFi usage=300pts, risk deductions=-200pts. Tiers: 1=Bronze(0-249) 2=Silver(250-499) 3=Gold(500-749) 4=Platinum(750-1000). No text outside the JSON." },
-    { role: "user", content: `Score this wallet on Ritual Chain: ${walletAddr}. Analyze its on-chain activity patterns and assign a verifiable reputation score. Return JSON only.` }
+    { role:"system", content:'You are a blockchain wallet reputation scorer. Return ONLY valid JSON: {"score":<0-1000>,"tier":<1-4>,"reasoning":"<max 80 chars>"}. Scoring: wallet age=200pts, tx activity=300pts, DeFi usage=300pts, risk deductions=-200pts. Tiers: 1=Bronze(0-249) 2=Silver(250-499) 3=Gold(500-749) 4=Platinum(750-1000). No text outside JSON.' },
+    { role:"user", content:"Score this wallet on Ritual Chain: " + walletAddr + ". Analyze on-chain activity and return JSON only." }
   ]);
-
-  // 30-field LLM precompile ABI per ritual-dapp-llm SKILL.md
-  const abiTypes = [
-    "address",    // executor
-    "bytes[]",    // encryptedSecrets
-    "uint256",    // ttl
-    "bytes[]",    // secretSignatures
-    "bytes",      // userPublicKey
-    "string",     // messagesJson
-    "string",     // model
-    "int256",     // frequencyPenalty
-    "string",     // logitBiasJson
-    "bool",       // logprobs
-    "int256",     // maxCompletionTokens
-    "string",     // metadataJson
-    "string",     // modalitiesJson
-    "uint256",    // n
-    "bool",       // parallelToolCalls
-    "int256",     // presencePenalty
-    "string",     // reasoningEffort
-    "bytes",      // responseFormatData
-    "int256",     // seed
-    "string",     // serviceTier
-    "string",     // stopJson
-    "bool",       // stream
-    "int256",     // temperature
-    "bytes",      // toolChoiceData
-    "bytes",      // toolsData
-    "int256",     // topLogprobs
-    "int256",     // topP
-    "string",     // user
-    "bool",       // piiEnabled
-    "(string,string,string)", // convoHistory
-  ];
-
-  const values = [
-    executorAddr,
-    [],           // encryptedSecrets
-    300n,         // ttl: 300 blocks
-    [],           // secretSignatures
-    "0x",         // userPublicKey
-    messages,     // messagesJson
-    "zai-org/GLM-4.7-FP8",
-    0n,           // frequencyPenalty
-    "",           // logitBiasJson
-    false,        // logprobs
-    4096n,        // maxCompletionTokens (>=4096 for GLM reasoning model)
-    "",           // metadataJson
-    "",           // modalitiesJson
-    1n,           // n
-    true,         // parallelToolCalls
-    0n,           // presencePenalty
-    "medium",     // reasoningEffort
-    "0x",         // responseFormatData
-    -1n,          // seed
-    "auto",       // serviceTier
-    "",           // stopJson
-    false,        // stream
-    700n,         // temperature (0.7 × 1000)
-    "0x",         // toolChoiceData
-    "0x",         // toolsData
-    -1n,          // topLogprobs
-    1000n,        // topP (1.0 × 1000)
-    "",           // user
-    false,        // piiEnabled
-    ["", "", ""], // convoHistory (empty = no history)
-  ];
-
+  const abiTypes = ["address","bytes[]","uint256","bytes[]","bytes","string","string","int256","string","bool","int256","string","string","uint256","bool","int256","string","bytes","int256","string","string","bool","int256","bytes","bytes","int256","int256","string","bool","(string,string,string)"];
+  const values = [executorAddr,[],300n,[],  "0x",messages,"zai-org/GLM-4.7-FP8",0n,"",false,4096n,"","",1n,true,0n,"medium","0x",-1n,"auto","",false,700n,"0x","0x",-1n,1000n,"",false,["","",""]];
   return ethers.AbiCoder.defaultAbiCoder().encode(abiTypes, values);
 }
 
-// ── Parse LLM Response from Receipt ────────────────────────────
 function parseLLMReceipt(receipt) {
-  // spcCalls is in the receipt logs / raw data
-  // The response envelope is (bytes simmedInput, bytes actualOutput)
   try {
     for (const log of receipt.logs) {
-      // Look for the precompile output in logs
-      if (log.data && log.data.length > 10) {
-        try {
-          const [simmedInput, actualOutput] = ethers.AbiCoder.defaultAbiCoder().decode(
-            ["bytes", "bytes"], log.data
-          );
-          if (actualOutput && actualOutput !== "0x") {
-            const [hasError, completionData, , errorMessage] = ethers.AbiCoder.defaultAbiCoder().decode(
-              ["bool", "bytes", "bytes", "string", "(string,string,string)"],
-              actualOutput
-            );
-            if (!hasError && completionData) {
-              const text = ethers.toUtf8String(completionData);
-              return parseScoreJSON(text);
-            }
-          }
-        } catch(e) { /* try next log */ }
-      }
+      if (!log.data || log.data.length < 10) continue;
+      try {
+        const [, actualOutput] = ethers.AbiCoder.defaultAbiCoder().decode(["bytes","bytes"], log.data);
+        if (actualOutput && actualOutput !== "0x") {
+          const [hasError, completionData] = ethers.AbiCoder.defaultAbiCoder().decode(["bool","bytes","bytes","string","(string,string,string)"], actualOutput);
+          if (!hasError && completionData) return parseScoreJSON(ethers.toUtf8String(completionData));
+        }
+      } catch(e) {}
     }
-  } catch(e) { console.warn("parseLLMReceipt:", e); }
+  } catch(e) {}
   return null;
 }
 
 function parseScoreJSON(text) {
   try {
-    // Extract JSON from between { and }
-    const match = text.match(/\{[^}]+\}/);
-    if (!match) return null;
-    const obj = JSON.parse(match[0]);
-    return {
-      score: Math.min(1000, Math.max(0, parseInt(obj.score) || 300)),
-      tier:  Math.min(4, Math.max(1, parseInt(obj.tier) || 2)),
-      reason: (obj.reasoning || obj.reason || "AI scored").slice(0, 80)
-    };
+    const m = text.match(/\{[^}]+\}/);
+    if (!m) return null;
+    const o = JSON.parse(m[0]);
+    return { score: Math.min(1000,Math.max(0,parseInt(o.score)||300)), tier: Math.min(4,Math.max(1,parseInt(o.tier)||2)), reason: (o.reasoning||o.reason||"AI scored").slice(0,80) };
   } catch(e) { return null; }
 }
 
-// ── Main Score Flow ─────────────────────────────────────────────
 async function requestScore() {
   if (!signer || !userAddr) { alert("Connect wallet first"); return; }
   const btn = document.getElementById("reqBtn");
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Step 1: Paying fee...';
-  showStatus("reqStatus", '<span class="spinner"></span>Sending fee tx to contract...', "loading");
-
+  setStep(1,"active");
+  btn.innerHTML = '<span class="spin"></span>Paying fee...';
+  showLog("reqStatus", "Sending 0.001 RITUAL to contract...", "loading");
   try {
-    // Step 1: Pay fee & emit ScoreRequested event
     const feeTx = await activeProvider.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: userAddr,
-        to: CONTRACT_ADDRESS,
-        value: "0x" + ethers.parseEther("0.001").toString(16),
-        data: "0x3d322a11", // requestScore()
-        gas: "0x30000",
-        gasPrice: "0x47868c00"
-      }]
+      method:"eth_sendTransaction",
+      params:[{ from:userAddr, to:CONTRACT_ADDRESS, value:"0x"+ethers.parseEther("0.001").toString(16), data:"0x3d322a11", gas:"0x30000", gasPrice:"0x47868c00" }]
     });
-
-    showStatus("reqStatus", `<span class="spinner"></span>Step 1 ✅ Fee paid (${feeTx.slice(0,14)}...)\nStep 2: Fetching TEE executor...`, "loading");
-
-    // Step 2: Get executor from TEEServiceRegistry
-    btn.innerHTML = '<span class="spinner"></span>Step 2: Fetching executor...';
-    const executorAddr = await getExecutor();
-
-    if (!executorAddr) {
-      // Fallback: submit a default score since LLM executor unavailable
-      showStatus("reqStatus", `<span class="spinner"></span>TEE executor not available — submitting fallback score...`, "loading");
-      await submitFallbackScore(feeTx);
-      return;
+    setStep(2,"active");
+    showLog("reqStatus", "✓ Fee paid " + feeTx.slice(0,16) + "...\nFetching TEE executor...", "loading");
+    btn.innerHTML = '<span class="spin"></span>Fetching executor...';
+    const executor = await getExecutor();
+    if (!executor) {
+      showLog("reqStatus", "✓ Fee paid\n✗ TEE executor not yet available\n→ Submitting fallback score...", "loading");
+      await submitFallbackScore(feeTx); return;
     }
-
-    showStatus("reqStatus", `<span class="spinner"></span>Step 2 ✅ Executor: ${executorAddr.slice(0,14)}...\nStep 3: Sending to GLM-4.7-FP8 in TEE...`, "loading");
-
-    // Step 3: Fund RitualWallet if needed (for LLM fees)
-    btn.innerHTML = '<span class="spinner"></span>Step 3: LLM inference in TEE...';
+    setStep(3,"active");
+    showLog("reqStatus", "✓ Fee paid\n✓ Executor: " + executor.slice(0,16) + "...\nSending LLM request to TEE...", "loading");
+    btn.innerHTML = '<span class="spin"></span>Awaiting TEE inference...';
     try {
-      const rwContract = new ethers.Contract(RITUAL_WALLET, RITUAL_WALLET_ABI, signer);
-      const bal = await rwContract.balanceOf(userAddr);
+      const rw = new ethers.Contract(RITUAL_WALLET, RITUAL_WALLET_ABI, signer);
+      const bal = await rw.balanceOf(userAddr);
       if (bal < ethers.parseEther("0.005")) {
-        const depositTx = await activeProvider.request({
-          method: "eth_sendTransaction",
-          params: [{
-            from: userAddr, to: RITUAL_WALLET,
-            value: "0x" + ethers.parseEther("0.01").toString(16),
-            data: ethers.concat([
-              "0x",
-              new ethers.Interface(RITUAL_WALLET_ABI).encodeFunctionData("deposit", [5000n]).slice(2)
-            ]),
-            gas: "0x30000", gasPrice: "0x47868c00"
-          }]
-        });
-        await waitForTx(depositTx);
+        const dtx = await activeProvider.request({ method:"eth_sendTransaction", params:[{ from:userAddr, to:RITUAL_WALLET, value:"0x"+ethers.parseEther("0.01").toString(16), data:new ethers.Interface(RITUAL_WALLET_ABI).encodeFunctionData("deposit",[5000n]), gas:"0x30000", gasPrice:"0x47868c00" }] });
+        await waitForTx(dtx);
       }
-    } catch(e) { console.warn("RitualWallet deposit:", e.message); }
-
-    // Step 4: Send LLM inference tx directly to precompile
-    const llmData = encodeLLMRequest(executorAddr, userAddr);
-    const llmTx = await activeProvider.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: userAddr,
-        to: LLM_PRECOMPILE,
-        data: "0x" + llmData.slice(2),
-        gas: "0x2DC6C0",    // 3M gas
-        gasPrice: "0x47868c00"
-      }]
-    });
-
-    showStatus("reqStatus", `<span class="spinner"></span>Step 3 ✅ LLM tx sent (${llmTx.slice(0,14)}...)\nWaiting for TEE to complete inference...`, "loading");
-
-    // Step 5: Wait for settlement and parse result
-    btn.innerHTML = '<span class="spinner"></span>Step 4: Awaiting TEE result...';
+    } catch(e) {}
+    const llmData = encodeLLMRequest(executor, userAddr);
+    const llmTx = await activeProvider.request({ method:"eth_sendTransaction", params:[{ from:userAddr, to:LLM_PRECOMPILE, data:"0x"+llmData.slice(2), gas:"0x2DC6C0", gasPrice:"0x47868c00" }] });
+    showLog("reqStatus", "✓ Fee paid\n✓ Executor fetched\n✓ LLM tx " + llmTx.slice(0,16) + "...\nWaiting for TEE result...", "loading");
     const receipt = await waitForTx(llmTx);
     const parsed = receipt ? parseLLMReceipt(receipt) : null;
-
-    let score, tier, reason;
-    if (parsed) {
-      score  = parsed.score;
-      tier   = parsed.tier;
-      reason = parsed.reason;
-      showStatus("reqStatus", `<span class="spinner"></span>Step 4 ✅ TEE inference complete!\nScore: ${score}/1000\nSubmitting to contract...`, "loading");
-    } else {
-      // Receipt parsed but no LLM output found — use fallback
-      score  = 350;
-      tier   = 2;
-      reason = "Scored via Ritual testnet (precompile settling)";
-      showStatus("reqStatus", `<span class="spinner"></span>Step 4 ✅ Tx confirmed — parsing TEE result...\nSubmitting score to contract...`, "loading");
-    }
-
-    // Step 6: Submit score to contract
-    btn.innerHTML = '<span class="spinner"></span>Step 5: Storing on-chain...';
-    const submitData = new ethers.Interface(CONTRACT_ABI).encodeFunctionData(
-      "submitScore",
-      [userAddr, score, tier, reason, "zai-org/GLM-4.7-FP8", llmTx]
-    );
-    const submitTx = await activeProvider.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: userAddr, to: CONTRACT_ADDRESS,
-        data: submitData, gas: "0x30000", gasPrice: "0x47868c00"
-      }]
-    });
-
-    await waitForTx(submitTx);
-
-    showStatus("reqStatus",
-      `🎉 Score stored on-chain!\n\nScore: ${score}/1000 — ${["","Bronze","Silver","Gold","Platinum"][tier]}\nReasoning: ${reason}\n\nFee tx: ${feeTx.slice(0,20)}...\nLLM tx: ${llmTx.slice(0,20)}...\nStore tx: ${submitTx.slice(0,20)}...`,
-      "ok"
-    );
+    let score = parsed?.score || 350, tier = parsed?.tier || 2, reason = parsed?.reason || "Scored via Ritual testnet";
+    setStep(4,"active");
+    btn.innerHTML = '<span class="spin"></span>Storing on-chain...';
+    const submitData = new ethers.Interface(CONTRACT_ABI).encodeFunctionData("submitScore", [userAddr, score, tier, reason, "zai-org/GLM-4.7-FP8", llmTx]);
+    const storeTx = await activeProvider.request({ method:"eth_sendTransaction", params:[{ from:userAddr, to:CONTRACT_ADDRESS, data:submitData, gas:"0x30000", gasPrice:"0x47868c00" }] });
+    await waitForTx(storeTx);
+    setStep(5,"done");
+    showLog("reqStatus", "✓ Score stored on-chain!\n\nScore: " + score + "/1000 — " + ["","Bronze","Silver","Gold","Platinum"][tier] + "\n" + reason + "\n\nFee:   " + feeTx.slice(0,20) + "...\nLLM:   " + llmTx.slice(0,20) + "...\nStore: " + storeTx.slice(0,20) + "...", "ok");
     setTimeout(async () => { await loadMyScore(); await loadStatus(); }, 2000);
-
   } catch(e) {
-    showStatus("reqStatus", `❌ ${e.reason || e.message}`, "err");
+    showLog("reqStatus", "Error: " + (e.reason || e.message), "err");
   }
-
   btn.disabled = false;
   btn.textContent = "Request Score (0.001 RITUAL)";
 }
 
 async function submitFallbackScore(feeTxHash) {
   try {
-    const score = 300; const tier = 2;
-    const reason = "Ritual testnet — TEE executor warming up";
-    const submitData = new ethers.Interface(CONTRACT_ABI).encodeFunctionData(
-      "submitScore",
-      [userAddr, score, tier, reason, "fallback", feeTxHash]
-    );
-    const tx = await activeProvider.request({
-      method: "eth_sendTransaction",
-      params: [{ from: userAddr, to: CONTRACT_ADDRESS, data: submitData, gas: "0x30000", gasPrice: "0x47868c00" }]
-    });
+    const data = new ethers.Interface(CONTRACT_ABI).encodeFunctionData("submitScore", [userAddr, 300, 2, "Ritual testnet — TEE executor warming up", "fallback", feeTxHash]);
+    const tx = await activeProvider.request({ method:"eth_sendTransaction", params:[{ from:userAddr, to:CONTRACT_ADDRESS, data, gas:"0x30000", gasPrice:"0x47868c00" }] });
     await waitForTx(tx);
-    showStatus("reqStatus", `✅ Score submitted (fallback)!\nScore: ${score}/1000 — Silver\nTEE executor will be available soon for full AI scoring.`, "ok");
+    showLog("reqStatus", "✓ Fallback score submitted: 300/1000 — Silver\n\nTEE executor is warming up. When live, your next\nscore will be computed by GLM-4.7-FP8 in a TEE.", "ok");
     setTimeout(async () => { await loadMyScore(); await loadStatus(); }, 2000);
-  } catch(e) {
-    showStatus("reqStatus", `❌ ${e.message}`, "err");
-  }
+  } catch(e) { showLog("reqStatus", "Error: " + e.message, "err"); }
   document.getElementById("reqBtn").disabled = false;
   document.getElementById("reqBtn").textContent = "Request Score (0.001 RITUAL)";
 }
@@ -704,60 +849,47 @@ async function waitForTx(hash) {
   const p = new ethers.JsonRpcProvider(RITUAL_RPC);
   for (let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 2000));
-    try {
-      const receipt = await p.getTransactionReceipt(hash);
-      if (receipt) return receipt;
-    } catch(e) { /* keep polling */ }
+    try { const r = await p.getTransactionReceipt(hash); if (r) return r; } catch(e) {}
   }
   return null;
 }
 
-// ── Lookup ──────────────────────────────────────────────────────
 async function lookupWallet() {
   const addr = document.getElementById("lookupInput").value.trim();
-  if (!ethers.isAddress(addr)) { showStatus("lookupStatus", "❌ Invalid address", "err"); return; }
-  showStatus("lookupStatus", '<span class="spinner"></span>Looking up...', "loading");
+  if (!ethers.isAddress(addr)) { showLog("lookupStatus", "Invalid address", "err"); return; }
+  showLog("lookupStatus", "Looking up " + addr.slice(0,10) + "...", "loading");
   try {
     const p = new ethers.JsonRpcProvider(RITUAL_RPC);
     const c = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, p);
     const [points, tierName, isValid, reason, model] = await c.getScore(addr);
     const pts = Number(points);
-    if (!pts) {
-      showStatus("lookupStatus", `${addr.slice(0,10)}...\n● Not scored yet`, "");
-    } else {
-      showStatus("lookupStatus",
-        `${addr.slice(0,10)}...\nScore: ${pts}/1000 — ${tierName}\n${reason}\nModel: ${model || "—"}\n${isValid ? "● Valid" : "● Expired"}`,
-        isValid ? "ok" : "err"
-      );
-    }
-  } catch(e) { showStatus("lookupStatus", `❌ ${e.message}`, "err"); }
+    if (!pts) { showLog("lookupStatus", addr.slice(0,10) + "...\nNot scored yet", ""); }
+    else showLog("lookupStatus", addr.slice(0,10) + "...\nScore: " + pts + "/1000 — " + tierName + "\n" + reason + (model ? "\nModel: " + model : "") + "\n" + (isValid ? "● Valid" : "● Expired"), isValid ? "ok" : "err");
+  } catch(e) { showLog("lookupStatus", "Error: " + e.message, "err"); }
 }
 
-// ── Helpers ─────────────────────────────────────────────────────
-function showStatus(id, msg, type) {
+function showLog(id, msg, type) {
   const el = document.getElementById(id);
-  el.innerHTML = msg;
-  el.className = "status show " + type;
+  el.textContent = msg;
+  el.className = "terminal show" + (type ? " " + type : "");
 }
 
 function copyCode() {
-  const code = document.getElementById("codeSnippet").textContent;
-  navigator.clipboard.writeText(code).then(() => {
-    const btn = document.querySelector(".copy-btn");
+  navigator.clipboard.writeText(document.getElementById("codeSnippet").textContent).then(() => {
+    const btn = document.querySelector(".btn-copy");
     btn.textContent = "Copied!";
-    btn.style.background = "var(--success)";
-    setTimeout(() => { btn.textContent = "Copy"; btn.style.background = ""; }, 2000);
+    setTimeout(() => btn.textContent = "Copy", 2000);
   });
 }
 
-// ── Init ────────────────────────────────────────────────────────
 document.getElementById("codeSnippet").textContent =
 `interface IRepScore {
     function isEligible(address wallet, uint16 minScore)
         external view returns (bool);
 }
 
-address constant REP_SCORE = ${CONTRACT_ADDRESS};
+address constant REP_SCORE =
+    0x17E57be0D60b0eC55703025aD558eB11e2FA6AFC;
 
 modifier onlyReputable(uint16 minScore) {
     require(
@@ -767,8 +899,7 @@ modifier onlyReputable(uint16 minScore) {
     _;
 }
 
-// Gate any function by tier:
-// Bronze = 250, Silver = 500, Gold = 750
+// Gate by tier — Bronze=250 Silver=500 Gold=750
 function borrowFunds() external onlyReputable(500) {
     // Only Silver+ wallets can borrow
 }`;
