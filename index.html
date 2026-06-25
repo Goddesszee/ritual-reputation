@@ -471,18 +471,42 @@ function showStatus(id, msg, type) {
 
 // Init code snippet
 document.getElementById("codeSnippet").textContent =
-`interface ISovereignRepAgent {
+`// 1. Import the interface
+interface IRepScore {
     function isEligible(address wallet, uint16 minScore)
         external view returns (bool);
 }
-address constant REP_AGENT = ${CONTRACT_ADDRESS};
-modifier requireReputation(uint16 minScore) {
-    require(ISovereignRepAgent(REP_AGENT).isEligible(msg.sender, minScore), "Low reputation");
+
+// 2. Set the contract address
+address constant REP_SCORE = ${CONTRACT_ADDRESS};
+
+// 3. Add the modifier
+modifier onlyReputable(uint16 minScore) {
+    require(
+        IRepScore(REP_SCORE).isEligible(msg.sender, minScore),
+        "RepScore: insufficient reputation"
+    );
     _;
+}
+
+// 4. Use it on any function
+function borrowFunds() external onlyReputable(500) {
+    // Only Gold (500+) wallets can borrow
 }`;
 
 // Load agent status on page load (no wallet needed)
 loadAgentStatus();
+
+function copyCode() {
+  const code = document.getElementById("codeSnippet").textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById("copyCodeBtn");
+    btn.textContent = "Copied!";
+    btn.style.background = "var(--success)";
+    btn.style.color = "#000";
+    setTimeout(() => { btn.textContent = "Copy"; btn.style.background = "var(--border)"; btn.style.color = "var(--text)"; }, 2000);
+  });
+}
 
 </script>
 </body>
