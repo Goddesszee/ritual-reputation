@@ -401,22 +401,39 @@ async function requestScore() {
   showStatus("reqStatus", '<span class="spinner"></span>Sending tx to Ritual...', "loading");
 
   try {
-    // Use raw eth_sendTransaction — no type field = Ritual accepts it
+    // Use raw eth_sendTransaction via EIP-6963 MetaMask — no type field = Ritual accepts it
+    const valueHex = "0x" + ethers.parseEther("0.001").toString(16);
     const txHash = await activeProvider.request({
       method: "eth_sendTransaction",
       params: [{
         from: userAddr,
         to: CONTRACT_ADDRESS,
-        value: "0x38D7EA4C68000",  // 0.001 RITUAL in hex
-        data: "0x3d322a11",         // requestScore() selector
-        gas: "0x15F90",
-        gasPrice: "0x47868C00"      // 1.2 gwei
+        value: valueHex,
+        data: "0x3d322a11",   // requestScore() selector
+        gas: "0x30000",
+        gasPrice: "0x47868c00"
       }]
     });
-    showStatus("reqStatus", `✅ Tx confirmed!
-Hash: ${txHash.slice(0,20)}...
-Your score is being computed on-chain.`, "ok");
-    setTimeout(loadMyScore, 5000);
+    showStatus("reqStatus", `<span class="spinner"></span>Tx sent: ${txHash.slice(0,16)}...
+Waiting for confirmation...`, "loading");
+    // Poll for confirmation
+    const pollInterval = setInterval(async () => {
+      try {
+        const p = new ethers.JsonRpcProvider(RITUAL_RPC);
+        const receipt = await p.getTransactionReceipt(txHash);
+        if (receipt) {
+          clearInterval(pollInterval);
+          if (receipt.status === 1) {
+            showStatus("reqStatus", `✅ Score confirmed on-chain!
+Tx: ${txHash.slice(0,20)}...`, "ok");
+            setTimeout(async () => { await loadMyScore(); await loadAgentStatus(); }, 1000);
+          } else {
+            showStatus("reqStatus", `❌ Transaction failed on-chain`, "err");
+          }
+        }
+      } catch(e) { /* keep polling */ }
+    }, 2000);
+    setTimeout(() => clearInterval(pollInterval), 60000); // stop after 60s
   } catch(e) {
     showStatus("reqStatus", `❌ ${e.message}`, "err");
   }
