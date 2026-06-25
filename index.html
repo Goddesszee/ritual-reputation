@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>RepScore — Sovereign AI Reputation Agent on Ritual</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<style>
+:root {
+  --bg:#08080f; --surface:#111118; --border:#1a1a2a;
+  --accent:#7c3aed; --accent2:#a855f7; --accent3:#c084fc;
+  --gold:#f59e0b; --silver:#94a3b8; --bronze:#b45309; --platinum:#e879f9;
+  --text:#e2e8f0; --muted:#64748b; --success:#10b981; --error:#ef4444;
+  --warn:#f59e0b;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+
+header{width:100%;padding:18px 32px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);backdrop-filter:blur(10px);position:sticky;top:0;z-index:10;background:rgba(8,8,15,0.9);}
+.logo{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:800;}
+.logo-mark{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.header-right{display:flex;align-items:center;gap:10px;}
+.pill{padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;}
+.pill-chain{background:#160a2e;border:1px solid var(--accent);color:var(--accent2);}
+.pill-agent{background:#052e16;border:1px solid var(--success);color:var(--success);display:flex;align-items:center;gap:5px;}
+.pill-agent.offline{background:#1c0808;border-color:var(--error);color:var(--error);}
+.pulse{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+.btn{border:none;cursor:pointer;font-weight:600;border-radius:10px;transition:all 0.2s;}
+.btn-connect{background:var(--accent);color:white;padding:9px 18px;font-size:14px;}
+.btn-connect:hover{background:var(--accent2);}
+
+main{max-width:680px;width:100%;padding:40px 20px;display:flex;flex-direction:column;gap:20px;}
+
+.hero{text-align:center;padding:20px 0;}
+.hero h1{font-size:38px;font-weight:900;line-height:1.1;margin-bottom:12px;}
+.hero h1 span{background:linear-gradient(135deg,#fff 20%,var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hero p{color:var(--muted);font-size:15px;line-height:1.7;max-width:500px;margin:0 auto;}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:16px;}
+
+/* Agent Status Bar */
+.agent-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.agent-stat{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+.agent-stat .val{font-size:22px;font-weight:800;color:var(--accent2);}
+.agent-stat .lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:3px;}
+
+/* Score Ring */
+.score-display{display:flex;align-items:center;gap:20px;}
+.score-ring{position:relative;width:110px;height:110px;flex-shrink:0;}
+.score-ring svg{width:100%;height:100%;transform:rotate(-90deg);}
+.ring-track{fill:none;stroke:var(--border);stroke-width:8;}
+.ring-fill{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1);}
+.score-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.score-num{font-size:26px;font-weight:900;}
+.score-denom{font-size:10px;color:var(--muted);}
+.score-info{flex:1;}
+.score-tier{font-size:20px;font-weight:800;margin-bottom:5px;}
+.score-reason{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px;}
+.tier-bronze{color:var(--bronze);}
+.tier-silver{color:var(--silver);}
+.tier-gold{color:var(--gold);}
+.tier-platinum{color:var(--platinum);}
+.validity{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;}
+.validity.valid{background:#052e16;color:var(--success);}
+.validity.expired{background:#1c0808;color:var(--error);}
+.validity.none{background:var(--border);color:var(--muted);}
+
+/* Buttons */
+.btn-primary{width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;padding:14px;border-radius:12px;font-size:15px;font-weight:700;border:none;cursor:pointer;transition:all 0.2s;}
+.btn-primary:hover:not(:disabled){opacity:.88;transform:translateY(-1px);}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed;}
+
+/* Lookup */
+.lookup-row{display:flex;gap:8px;}
+.lookup-row input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:13px;font-family:monospace;}
+.lookup-row input:focus{outline:none;border-color:var(--accent);}
+.btn-sm{background:var(--border);color:var(--text);border:none;padding:11px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.btn-sm:hover{background:#222230;}
+
+/* Status */
+.status{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:13px;color:var(--muted);display:none;margin-top:10px;line-height:1.6;white-space:pre-wrap;}
+.status.show{display:block;}
+.status.loading{color:var(--accent2);border-color:var(--accent);}
+.status.ok{color:var(--success);border-color:var(--success);}
+.status.err{color:var(--error);border-color:var(--error);}
+
+/* Integration */
+.code{background:#07070e;border:1px solid var(--border);border-radius:10px;padding:16px;font-family:monospace;font-size:12px;color:#a78bfa;overflow-x:auto;white-space:pre;line-height:1.7;}
+
+/* Tier table */
+.tier-table{width:100%;border-collapse:collapse;}
+.tier-table td,.tier-table th{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;}
+.tier-table th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+.tier-table tr:last-child td{border:none;}
+
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid transparent;border-top-color:currentColor;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:5px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+footer{padding:28px 32px;text-align:center;color:var(--muted);font-size:12px;border-top:1px solid var(--border);width:100%;margin-top:auto;}
+footer a{color:var(--accent2);text-decoration:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">⬡</div>
+    RepScore
+  </div>
+  <div class="header-right">
+    <span class="pill pill-chain">Ritual Chain · 1979</span>
+    <span class="pill pill-agent offline" id="agentPill">
+      <span class="pulse"></span> Agent Offline
+    </span>
+    <button class="btn btn-connect" id="connectBtn" onclick="connectWallet()">Connect</button>
+  </div>
+</header>
+
+<main>
+
+  <div class="hero">
+    <h1><span>Sovereign AI</span><br>Reputation Agent</h1>
+    <p>A self-waking autonomous agent on Ritual Chain. It scores wallets via LLM inference inside a TEE, refreshes expiring scores every ~3 minutes, and can never be shut down.</p>
+  </div>
+
+  <!-- Agent Status -->
+  <div class="card">
+    <div class="card-title">Agent Status</div>
+    <div class="agent-grid">
+      <div class="agent-stat"><div class="val" id="statWakeups">—</div><div class="lbl">Wakeups</div></div>
+      <div class="agent-stat"><div class="val" id="statScored">—</div><div class="lbl">Wallets Scored</div></div>
+      <div class="agent-stat"><div class="val" id="statTracked">—</div><div class="lbl">Tracking</div></div>
+    </div>
+  </div>
+
+  <!-- Your Score (shown after connect) -->
+  <div class="card" id="myScoreCard" style="display:none">
+    <div class="card-title">Your Score</div>
+    <div class="score-display">
+      <div class="score-ring">
+        <svg viewBox="0 0 100 100">
+          <circle class="ring-track" cx="50" cy="50" r="42"/>
+          <circle class="ring-fill" id="ringFill" cx="50" cy="50" r="42"
+            stroke="var(--accent2)" stroke-dasharray="264" stroke-dashoffset="264"/>
+        </svg>
+        <div class="score-center">
+          <span class="score-num" id="scoreNum">—</span>
+          <span class="score-denom">/1000</span>
+        </div>
+      </div>
+      <div class="score-info">
+        <div class="score-tier" id="scoreTier">—</div>
+        <div class="score-reason" id="scoreReason">Connect wallet to see your score.</div>
+        <span class="validity none" id="validityBadge">● Not scored</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Request Score -->
+  <div class="card">
+    <div class="card-title">Request Score</div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Submit your wallet to the sovereign agent. The AI scores you inside Ritual's TEE. Your wallet is then tracked — the agent auto-refreshes your score before it expires.</p>
+    <button class="btn-primary" id="reqBtn" onclick="requestScore()" disabled>
+      Connect wallet first
+    </button>
+    <div class="status" id="reqStatus"></div>
+  </div>
+
+  <!-- Lookup -->
+  <div class="card">
+    <div class="card-title">Look Up Any Wallet</div>
+    <div class="lookup-row">
+      <input id="lookupInput" type="text" placeholder="0x... wallet address"/>
+      <button class="btn-sm" onclick="lookupWallet()">Search</button>
+    </div>
+    <div class="status" id="lookupStatus"></div>
+  </div>
+
+  <!-- Tier Reference -->
+  <div class="card">
+    <div class="card-title">Reputation Tiers</div>
+    <table class="tier-table">
+      <tr><th>Tier</th><th>Score Range</th><th>What It Unlocks</th></tr>
+      <tr><td class="tier-bronze">🥉 Bronze</td><td>0 – 249</td><td>Basic access</td></tr>
+      <tr><td class="tier-silver">🥈 Silver</td><td>250 – 499</td><td>Reduced collateral</td></tr>
+      <tr><td class="tier-gold">🥇 Gold</td><td>500 – 749</td><td>Undercollateralized loans</td></tr>
+      <tr><td class="tier-platinum">💎 Platinum</td><td>750 – 1000</td><td>Full protocol access</td></tr>
+    </table>
+  </div>
+
+  <!-- Integration -->
+  <div class="card">
+    <div class="card-title">Integrate Into Your Protocol</div>
+    <div class="code" id="codeSnippet">// Loading...</div>
+  </div>
+
+</main>
+
+<footer>
+  Sovereign agent running on <a href="https://ritualfoundation.org" target="_blank">Ritual Chain</a> ·
+  <a href="https://github.com/Goddesszee/ritual-reputation" target="_blank">GitHub</a> ·
+  <a href="https://explorer.ritualfoundation.org" target="_blank">Explorer</a>
+</footer>
+
+<script>
+const RITUAL_CHAIN_ID = "0x7BB";
+const RITUAL_RPC      = "https://rpc.ritualfoundation.org";
+
+// ← Replace after deploying contract
+let CONTRACT_ADDRESS  = "0x0000000000000000000000000000000000000000";
+
+const ABI = [
+  "function requestScore() external payable returns (bytes32)",
+  "function getScore(address) external view returns (uint16,uint8,string,uint64,bool,string)",
+  "function isEligible(address,uint16) external view returns (bool)",
+  "function getAgentStatus() external view returns (bool,uint256,uint256,uint256,uint256,uint256,uint256)",
+  "function getRegisteredWallets() external view returns (address[])",
+  "event ScoreUpdated(address indexed,uint16,uint8,string)",
+  "event AgentWoke(uint256 indexed,uint256,uint256)"
+];
+
+let provider, signer, contract, userAddr;
+
+// ── Connect ────────────────────────────────────────────────────
+async function connectWallet() {
+  if (!window.ethereum) { alert("Install MetaMask first"); return; }
+  try {
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    try {
+      await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:RITUAL_CHAIN_ID}] });
+    } catch(e) {
+      if (e.code === 4902) {
+        await window.ethereum.request({ method:"wallet_addEthereumChain", params:[{
+          chainId: RITUAL_CHAIN_ID,
+          chainName: "Ritual Chain Testnet",
+          nativeCurrency: { name:"RITUAL", symbol:"RITUAL", decimals:18 },
+          rpcUrls: [RITUAL_RPC],
+          blockExplorerUrls: ["https://explorer.ritualfoundation.org"]
+        }]});
+      }
+    }
+    signer   = await provider.getSigner();
+    userAddr = await signer.getAddress();
+    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+    const short = userAddr.slice(0,6)+"..."+userAddr.slice(-4);
+    document.getElementById("connectBtn").textContent = short;
+    document.getElementById("myScoreCard").style.display = "block";
+    document.getElementById("reqBtn").disabled = false;
+    document.getElementById("reqBtn").textContent = "Request Score (0.001 RITUAL)";
+
+    await Promise.all([loadMyScore(), loadAgentStatus()]);
+
+    // Poll agent status every 30s
+    setInterval(loadAgentStatus, 30000);
+
+    // Listen for score updates
+    contract.on("ScoreUpdated", (wallet, score, tier, reasoning) => {
+      if (wallet.toLowerCase() === userAddr.toLowerCase()) {
+        showStatus("reqStatus", `🎉 Score computed! ${score}/1000\n${reasoning}`, "ok");
+        loadMyScore();
+        loadAgentStatus();
+      }
+    });
+  } catch(e) { console.error(e); }
+}
+
+// ── Load Score ─────────────────────────────────────────────────
+async function loadMyScore() {
+  if (!contract || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") return;
+  try {
+    const [score,,tierName,expiresAt,isValid,reasoning] = await contract.getScore(userAddr);
+    const s = Number(score);
+
+    document.getElementById("scoreNum").textContent = s || "—";
+    document.getElementById("scoreTier").textContent = tierName || "Unrated";
+    document.getElementById("scoreReason").textContent = reasoning || "No score yet. Request one below.";
+
+    // Ring
+    const pct = (s / 1000) * 264;
+    document.getElementById("ringFill").style.strokeDashoffset = 264 - pct;
+    const color = tierName==="Platinum"?"#e879f9":tierName==="Gold"?"#f59e0b":tierName==="Silver"?"#94a3b8":tierName==="Bronze"?"#b45309":"#64748b";
+    document.getElementById("ringFill").style.stroke = color;
+
+    // Tier class
+    const tierEl = document.getElementById("scoreTier");
+    tierEl.className = "score-tier " + (tierName?`tier-${tierName.toLowerCase()}`:"");
+
+    // Badge
+    const badge = document.getElementById("validityBadge");
+    if (!s) { badge.className="validity none"; badge.textContent="● Not scored"; }
+    else if (isValid) {
+      badge.className="validity valid";
+      badge.textContent=`● Valid until ${new Date(Number(expiresAt)*1000).toLocaleDateString()}`;
+    } else {
+      badge.className="validity expired";
+      badge.textContent="● Expired — agent will refresh soon";
+    }
+  } catch(e) { console.error("loadScore:", e); }
+}
+
+// ── Agent Status ───────────────────────────────────────────────
+async function loadAgentStatus() {
+  if (!contract || CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") return;
+  try {
+    const [running,wakeups,scored,,,,tracked] = await contract.getAgentStatus();
+    document.getElementById("statWakeups").textContent = wakeups.toString();
+    document.getElementById("statScored").textContent  = scored.toString();
+    document.getElementById("statTracked").textContent = tracked.toString();
+
+    const pill = document.getElementById("agentPill");
+    if (running) {
+      pill.className = "pill pill-agent";
+      pill.innerHTML = '<span class="pulse"></span> Agent Live';
+    } else {
+      pill.className = "pill pill-agent offline";
+      pill.innerHTML = '<span class="pulse"></span> Agent Offline';
+    }
+  } catch(e) { /* silent */ }
+}
+
+// ── Request Score ──────────────────────────────────────────────
+async function requestScore() {
+  if (!signer) { alert("Connect wallet first"); return; }
+  const btn = document.getElementById("reqBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Submitting...';
+  showStatus("reqStatus", '<span class="spinner"></span>Sending tx to Ritual...', "loading");
+
+  try {
+    const tx = await contract.requestScore({ value: ethers.parseEther("0.001") });
+    showStatus("reqStatus", `<span class="spinner"></span>Tx: ${tx.hash.slice(0,12)}...\nWaiting for TEE to process your score...`, "loading");
+    const r = await tx.wait();
+    showStatus("reqStatus", `✅ Submitted! Tx confirmed.\nThe sovereign agent's TEE executor is computing your score.\nIt will appear here automatically.`, "ok");
+  } catch(e) {
+    showStatus("reqStatus", `❌ ${e.reason || e.message}`, "err");
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Request Score (0.001 RITUAL)";
+}
+
+// ── Lookup ─────────────────────────────────────────────────────
+async function lookupWallet() {
+  const addr = document.getElementById("lookupInput").value.trim();
+  if (!ethers.isAddress(addr)) { showStatus("lookupStatus","❌ Invalid address","err"); return; }
+
+  showStatus("lookupStatus",'<span class="spinner"></span>Looking up...','loading');
+  try {
+    const p = provider || new ethers.JsonRpcProvider(RITUAL_RPC);
+    const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, p);
+    const [score,,tierName,expiresAt,isValid,reasoning] = await c.getScore(addr);
+    const s = Number(score);
+
+    if (!s) {
+      showStatus("lookupStatus", `${addr.slice(0,10)}...\n● Not scored yet`, "");
+    } else {
+      const exp = new Date(Number(expiresAt)*1000).toLocaleDateString();
+      showStatus("lookupStatus",
+        `${addr.slice(0,10)}...\nScore: ${s}/1000 — ${tierName}\n${reasoning}\n${isValid?`Valid until ${exp}`:"Expired"}`,
+        isValid?"ok":"err"
+      );
+    }
+  } catch(e) { showStatus("lookupStatus",`❌ ${e.message}`,"err"); }
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function showStatus(id, msg, type) {
+  const el = document.getElementById(id);
+  el.innerHTML = msg;
+  el.className = "status show " + type;
+}
+
+// ── Init ───────────────────────────────────────────────────────
+document.getElementById("codeSnippet").textContent =
+`// Add reputation gating to any Solidity contract
+interface ISovereignRepAgent {
+    function isEligible(address wallet, uint16 minScore)
+        external view returns (bool);
+}
+
+address constant REP_AGENT = ${CONTRACT_ADDRESS};
+
+modifier requireReputation(uint16 minScore) {
+    require(
+        ISovereignRepAgent(REP_AGENT).isEligible(msg.sender, minScore),
+        "Insufficient reputation score"
+    );
+    _;
+}
+
+// Usage: onlyGold = requireReputation(500)
+// Usage: onlyPlatinum = requireReputation(750)`;
+
+if (window.ethereum?.selectedAddress) connectWallet();
+</script>
+</body>
+</html>
