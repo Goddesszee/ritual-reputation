@@ -227,9 +227,9 @@ const CONTRACT_ADDRESS = "0x0b3d96FA95b5C8033994cF77FFC174DBAD50CF8D";
 
 const ABI = [
   "function requestScore() external payable",
-  "function getScore(address) external view returns (uint16,uint8,string,uint64,bool,string)",
+  "function getScore(address) external view returns (uint16,string,bool,string)",
   "function isEligible(address,uint16) external view returns (bool)",
-  "function getStatus() external view returns (bool,uint256,uint256,uint256,uint256)",
+  "function totalScored() external view returns (uint256)", "function earnings() external view returns (uint256)",
 ];
 
 let provider, signer, contract, userAddr, activeProvider;
@@ -352,11 +352,11 @@ async function connectWallet() {
 async function loadMyScore() {
   if (!contract) return;
   try {
-    const [points,,tierName,expiresAt,isValid,reason] = await contract.getScore(userAddr);
+    const [points, tierName, isValid, reason] = await contract.getScore(userAddr);
     const p = Number(points);
     document.getElementById("scoreNum").textContent = p || "—";
     document.getElementById("scoreTier").textContent = tierName || "Unrated";
-    document.getElementById("scoreReason").textContent = reason || "No score yet.";
+    document.getElementById("scoreReason").textContent = reason || "No score yet. Request one below.";
     const pct = (p / 1000) * 264;
     document.getElementById("ringFill").style.strokeDashoffset = 264 - pct;
     const color = tierName==="Platinum"?"#e879f9":tierName==="Gold"?"#f59e0b":tierName==="Silver"?"#94a3b8":tierName==="Bronze"?"#b45309":"#64748b";
@@ -365,7 +365,7 @@ async function loadMyScore() {
     tierEl.className = "score-tier"+(tierName?` tier-${tierName.toLowerCase()}`:"");
     const badge = document.getElementById("validityBadge");
     if (!p) { badge.className="validity none"; badge.textContent="● Not scored"; }
-    else if (isValid) { badge.className="validity valid"; badge.textContent=`● Valid until ${new Date(Number(expiresAt)*1000).toLocaleDateString()}`; }
+    else if (isValid) { badge.className="validity valid"; badge.textContent="● Valid — score active"; }
     else { badge.className="validity expired"; badge.textContent="● Expired"; }
   } catch(e) { console.error("loadScore:", e); }
 }
@@ -373,16 +373,23 @@ async function loadMyScore() {
 // ── Agent Status ───────────────────────────────────────────────
 async function loadAgentStatus() {
   try {
-    const p = provider || new ethers.JsonRpcProvider(RITUAL_RPC);
-    const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, p);
-    const [running,wakeups,scored,,tracked] = await c.getStatus();
-    document.getElementById("statWakeups").textContent = wakeups.toString();
+    const p2 = new ethers.JsonRpcProvider(RITUAL_RPC);
+    const minABI = [
+      "function totalScored() external view returns (uint256)",
+      "function earnings() external view returns (uint256)"
+    ];
+    const c2 = new ethers.Contract(CONTRACT_ADDRESS, minABI, p2);
+    const scored = await c2.totalScored();
+    const earn   = await c2.earnings();
+    document.getElementById("statWakeups").textContent = "Live";
     document.getElementById("statScored").textContent  = scored.toString();
-    document.getElementById("statTracked").textContent = tracked.toString();
+    document.getElementById("statTracked").textContent = ethers.formatEther(earn) + " RTL";
     const pill = document.getElementById("agentPill");
-    pill.className = "pill pill-agent" + (running ? "" : " offline");
-    pill.innerHTML = `<span class="pulse"></span> Agent ${running ? "Live" : "Offline"}`;
-  } catch(e) { /* silent */ }
+    pill.className = "pill pill-agent";
+    pill.innerHTML = `<span class="pulse"></span> Agent Live`;
+  } catch(e) {
+    document.getElementById("agentPill").innerHTML = `<span class="pulse"></span> Agent Offline`;
+  }
 }
 
 // ── Request Score — raw tx, no type field ──────────────────────
@@ -426,16 +433,15 @@ async function lookupWallet() {
   try {
     const p = new ethers.JsonRpcProvider(RITUAL_RPC);
     const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, p);
-    const [points,,tierName,expiresAt,isValid,reason] = await c.getScore(addr);
+    const [points, tierName, isValid, reason] = await c.getScore(addr);
     const pts = Number(points);
     if (!pts) { showStatus("lookupStatus",`${addr.slice(0,10)}...
 ● Not scored yet`,""); }
     else {
-      const exp = new Date(Number(expiresAt)*1000).toLocaleDateString();
       showStatus("lookupStatus",`${addr.slice(0,10)}...
 Score: ${pts}/1000 — ${tierName}
 ${reason}
-${isValid?`Valid until ${exp}`:"Expired"}`, isValid?"ok":"err");
+${isValid?"● Valid":"● Expired"}`, isValid?"ok":"err");
     }
   } catch(e) { showStatus("lookupStatus",`❌ ${e.message}`,"err"); }
 }
