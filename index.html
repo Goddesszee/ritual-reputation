@@ -503,8 +503,11 @@ footer{
         </div>
       </div>
     </div>
-    <div style="padding:16px 20px 20px;">
+    <div style="padding:16px 20px 20px;display:flex;flex-direction:column;gap:10px;">
       <button class="btn-cta" id="reqBtn" onclick="requestScore()" disabled>Connect wallet first</button>
+      <button id="authBtn" onclick="authorizeMe()" style="width:100%;padding:10px;background:transparent;border:1px solid var(--line);border-radius:var(--r);color:var(--dim);font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;" onmouseover="this.style.borderColor='var(--violet)';this.style.color='var(--violet-light)'" onmouseout="this.style.borderColor='var(--line)';this.style.color='var(--dim)'">
+        Authorize my wallet as submitter (owner only)
+      </button>
       <div class="terminal" id="reqStatus"></div>
     </div>
   </div>
@@ -905,6 +908,31 @@ function borrowFunds() external onlyReputable(500) {
 }`;
 
 loadStatus();
+
+// ── Admin: self-authorize as submitter ──
+async function authorizeMe() {
+  if (!signer || !userAddr) { alert("Connect wallet first"); return; }
+  const btn = document.getElementById("authBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>Authorizing...';
+  try {
+    const data = new ethers.Interface([
+      "function authorizeSubmitter(address,bool) external"
+    ]).encodeFunctionData("authorizeSubmitter", [userAddr, true]);
+    const tx = await activeProvider.request({
+      method: "eth_sendTransaction",
+      params: [{ from: userAddr, to: CONTRACT_ADDRESS, data, gas: "0x30000", gasPrice: "0x47868c00" }]
+    });
+    await waitForTx(tx);
+    btn.textContent = "✓ Authorized — try Request Score now";
+    btn.style.background = "rgba(0,212,140,.15)";
+    btn.style.color = "var(--green)";
+    btn.style.border = "1px solid rgba(0,212,140,.3)";
+  } catch(e) {
+    btn.textContent = "Failed: " + (e.reason || e.message).slice(0,40);
+    btn.disabled = false;
+  }
+}
 </script>
 </body>
 </html>
